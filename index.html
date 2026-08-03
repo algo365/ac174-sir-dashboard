@@ -54,6 +54,10 @@
   .scope-meta{color:var(--ink-2);font-size:13px;margin-bottom:14px}
   .prez{display:inline-block;background:var(--navy);color:#fff;font-size:11.5px;font-weight:700;
     padding:3px 10px;border-radius:999px;margin-left:8px}
+  .srlist{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+  .sr{text-align:left;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--sh-sm);display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:13px}
+  .sr:hover{border-color:var(--navy-2);background:#faf7f1}
+  .sr .dim{color:var(--ink-3);font-size:11.5px;font-weight:600}
 
   .kpis{background:linear-gradient(120deg,var(--navy),var(--navy-2));border-radius:var(--r-lg);
     padding:16px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;box-shadow:var(--sh-md);margin-bottom:16px}
@@ -184,7 +188,7 @@
     <div class="seg" id="mandalFilter" role="group" aria-label="Mandala filter">
       <button data-f="All" class="on">All</button><button data-f="Urban">Urban</button><button data-f="Rural">Rural</button>
     </div>
-    <input class="search" id="search" placeholder="Search ward / booth #" aria-label="Search ward or booth">
+    <input class="search" id="search" placeholder="Search ward / booth # / voter name / EPIC" aria-label="Search ward, booth, voter name or EPIC">
   </div>
   <div id="app"></div>
   <div class="foot" id="foot"></div>
@@ -223,7 +227,7 @@
   function compLegend(t){const tot=Math.max(1,t.totalVoters);
     return `<div class="legend">`+COMP.map(([nm,k,c])=>`<span><b style="background:${c}"></b>${esc(nm)} — <b style="color:var(--ink)">${fmt(t[k])}</b> (${p1(pct(t[k],tot))})</span>`).join('')+`</div>`;}
 
-  let DATA=null,BOOTHS=[],ROSTERS=null,WARDPREZ={};
+  let DATA=null,BOOTHS=[],ROSTERS=null,WARDPREZ={},VOTERIDX=null,pendingRosterQ='';
   const st={level:'assembly',mandal:null,ward:null,booth:null,filter:'All',sortKey:'booth',sortDir:1};
   // history-backed navigation so the browser / phone Back button walks the levels
   function snapshot(){return {level:st.level,mandal:st.mandal,ward:st.ward,booth:st.booth,filter:st.filter,sortKey:st.sortKey,sortDir:st.sortDir};}
@@ -255,6 +259,28 @@
       return [...wm.entries()].sort((a,z)=>a[0].localeCompare(z[0])).map(([w,rows])=>({key:w,name:w,type:'ward',rows}));}
     return [];}
 
+  const BAR_SERIES=[['totalVoters','Total Voters','var(--ink-3)'],['mpVoted','MP Voted 2024','var(--navy)'],
+    ['sirSubmitted','SIR Submitted','var(--green)'],['delTotal','SIR Delete','var(--red)']];
+  function groupedBar(items){
+    const n=items.length, S=BAR_SERIES.length;
+    const barW=9, inGap=2, groupPad=16, pl=52, pr=12, pt=12, pb=54, H=270;
+    const groupW=S*barW+(S-1)*inGap;
+    const W=Math.max(560, pl+pr+n*(groupW+groupPad));
+    const plotH=H-pt-pb;
+    let max=1; for(const it of items) for(const[k] of BAR_SERIES) max=Math.max(max,it.a[k]||0);
+    const nice=Math.pow(10,Math.floor(Math.log10(max))); const top=Math.ceil(max/nice)*nice;
+    const y=v=>H-pb-(v/top)*plotH;
+    const grid=[0,.25,.5,.75,1].map(f=>{const gy=y(top*f);return `<line x1="${pl}" y1="${gy}" x2="${W-pr}" y2="${gy}" stroke="#eee3d0"/><text x="${pl-6}" y="${gy+3}" text-anchor="end" font-size="9" fill="#93a0b5">${fmt(Math.round(top*f))}</text>`;}).join('');
+    const groups=items.map((it,gi)=>{
+      const gx=pl+groupPad/2+gi*(groupW+groupPad);
+      const bars=BAR_SERIES.map(([k,label,c],si)=>{const v=it.a[k]||0,bx=gx+si*(barW+inGap),by=y(v),bh=H-pb-by;
+        return `<rect x="${bx}" y="${by}" width="${barW}" height="${Math.max(0,bh)}" fill="${c}" rx="1.5"><title>${esc(it.name)} — ${esc(label)}: ${fmt(v)}</title></rect>`;}).join('');
+      const lbl=esc(String(it.name).length>9?String(it.name).slice(0,8)+'…':it.name);
+      return `${bars}<text x="${gx+groupW/2}" y="${H-pb+14}" text-anchor="end" font-size="9" fill="#54607a" transform="rotate(-35 ${gx+groupW/2} ${H-pb+14})">${lbl}</text>`;
+    }).join('');
+    const legend=`<div class="legend" style="margin-top:8px">`+BAR_SERIES.map(([k,l,c])=>`<span><b style="background:${c}"></b>${l}</span>`).join('')+`</div>`;
+    return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%;min-width:${Math.min(W,720)}px;height:auto;display:block">${grid}${groups}</svg></div>${legend}`;
+  }
   function render(){
     renderCrumbs(); $('#back').disabled=st.level==='assembly';
     [...$('#mandalFilter').children].forEach(x=>x.classList.toggle('on',x.dataset.f===st.filter));
@@ -274,7 +300,7 @@
       ${kpi(fmt(t.totalVoters),'Total Voters')}${kpi(fmt(t.mpVoted),'MP Voted 2024')}
       ${kpi(fmt(t.sirSubmitted),'SIR Submitted')}${kpi(fmt(t.delTotal),'To Delete')}
       ${kpi(fmt(t.notSubmitted),'Not Yet Submitted')}${kpi(p1(t.coverage),'MP %',covBand(t.coverage))}
-      ${kpi(p1(t.digitized),'Digitized',digBand(t.digitized))}</div>`;
+      ${kpi(p1(t.digitized),'SIR Sub %',digBand(t.digitized))}</div>`;
 
     const cb=covBand(t.coverage),db=digBand(t.digitized);
     const big=`<div class="bigrow">
@@ -282,7 +308,7 @@
         <div class="num ${cb}">${p1(t.coverage)}</div>
         <div class="den">${fmt(t.sirSubmitted)} submitted vs ${fmt(t.mpVoted)} MP-2024 voters · 2024 turnout ${p1(t.turnout)}</div>
         <div class="prog"><i class="${cb}" style="width:${Math.min(100,t.coverage)}%"></i></div></div>
-      <div class="big"><div class="cap">Digitized % · SIR Submitted / Total Voters</div>
+      <div class="big"><div class="cap">SIR Submitted % · SIR Submitted / Total Voters</div>
         <div class="num ${db}">${p1(t.digitized)}</div>
         <div class="den">${fmt(t.sirSubmitted)} submitted of ${fmt(t.totalVoters)} total voters</div>
         <div class="prog"><i class="${db}" style="width:${Math.min(100,t.digitized)}%"></i></div></div></div>`;
@@ -291,16 +317,16 @@
     const labels=chItems.map(c=>c.name),aggs=chItems.map(c=>agg(c.rows));
     const voted=aggs.map(a=>a.mpVoted),sub=aggs.map(a=>a.sirSubmitted),tv=aggs.map(a=>a.totalVoters);
     const clabel=st.level==='ward'?'booths':(st.level==='assembly'?'mandalas':'wards');
-    const gapC=t.votedGap>0?`<div class="callout">▲ ${fmt(t.votedGap)} MP-2024 voters with no SIR form yet</div>`
-      :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ All ${fmt(t.mpVoted)} MP-2024 voters covered${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
-    const panels=`<div class="panels">
-      <div class="panel"><h3>MP-Voted vs SIR-Submitted gap</h3><div class="hint">MP Voted 2024 (navy) vs SIR Submitted (green) across ${chItems.length} ${clabel}; shaded = gap</div>
-        ${areaChart(labels,sub,voted,'var(--green)','var(--navy)')}${gapC}
-        <div class="legend"><span><b style="background:var(--navy)"></b>MP Voted 2024</span><span><b style="background:var(--green)"></b>SIR Submitted</span></div></div>
-      <div class="panel"><h3>Not-yet-submitted</h3><div class="hint">Total Voters (blue) vs SIR Submitted (green) across ${chItems.length} ${clabel}; shaded = pending</div>
-        ${areaChart(labels,sub,tv,'var(--green)','var(--blue)')}
-        <div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} not yet submitted</div>
-        <div class="legend"><span><b style="background:var(--blue)"></b>Total Voters</span><span><b style="background:var(--green)"></b>SIR Submitted</span></div></div></div>`;
+    const one=clabel.slice(0,-1);
+    const barItems=chItems.map((c,idx)=>({name:c.name,a:aggs[idx]}));
+    const gapC=t.votedGap>0?`<div class="callout">▲ ${fmt(t.votedGap)} MP-2024 voters with no SIR form (Total EFs still to submit)</div>`
+      :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ SIR Submitted covers all ${fmt(t.mpVoted)} MP-2024 voters${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
+    const subC=`<div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} total voters not yet submitted</div>`;
+    const panels=`<div class="panel" style="margin-bottom:16px">
+      <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete</h3>
+      <div class="hint">Counts per ${one} across ${chItems.length} ${clabel}. SIR Submitted = EFs digitized; compared against MP-2024 voters and total voters.</div>
+      ${groupedBar(barItems)}
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">${gapC}${subC}</div></div>`;
 
     const comp=`<div class="panel" style="margin-bottom:16px"><h3>Composition of ${fmt(t.totalVoters)} voters — Submitted vs deletion categories</h3>
       <div class="hint">Submitted ${fmt(t.sirSubmitted)} (${p1(t.digitized)}) + to-delete ${fmt(t.delTotal)} (${p1(t.deletion)})</div>
@@ -338,17 +364,17 @@
         <div class="scope-meta" style="margin:6px 0 0;font-size:11px">MP Voted % Coverage (${fmt(a.mpVoted)})</div>
       </div></button>`;}).join('')+`</div>`;}
 
-  const COLS=[['booth','Booth',0],['blo','BLO',0],['supervisor','Supervisor',0],['totalVoters','Total',1],
-    ['mpVoted','MP Voted',1],['sirSubmitted','Submitted',1],['delTotal','To Delete',1],
-    ['coverage','MP %',1],['digitized','Dig %',1]];
-  function rowVals(x){const a=agg([x]);return {booth:x.booth,blo:x.blo||'—',supervisor:x.supervisor||'—',
+  const COLS=[['booth','Booth',0],['blo','BLO',0],['totalVoters','Total Voters',1],
+    ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1],
+    ['coverage','MP %',1],['digitized','Sub %',1]];
+  function rowVals(x){const a=agg([x]);return {booth:x.booth,blo:x.blo||'—',
     totalVoters:x.totalVoters,mpVoted:x.mpVoted,sirSubmitted:x.sirSubmitted,delTotal:x.delTotal,coverage:a.coverage,digitized:a.digitized};}
   function boothTable(b){
     let rows=b.map(rowVals);
     rows.sort((p,q)=>{const A=p[st.sortKey],B=q[st.sortKey];return((A>B)-(A<B))*st.sortDir;});
     const head=COLS.map(([k,l,r])=>`<th class="${r?'r':''}" data-k="${k}">${l}${st.sortKey===k?`<span class="ar">${st.sortDir>0?'▲':'▼'}</span>`:''}</th>`).join('');
     const body=rows.map(v=>{const cb=covBand(v.coverage),db=digBand(v.digitized);
-      return `<tr data-booth="${v.booth}"><td class="strong">#${v.booth}</td><td class="dim">${esc(v.blo)}</td><td class="dim">${esc(v.supervisor)}</td>
+      return `<tr data-booth="${v.booth}"><td class="strong">#${v.booth}</td><td class="dim">${esc(v.blo)}</td>
         <td class="r">${fmt(v.totalVoters)}</td><td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td>
         <td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td><td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td></tr>`;}).join('');
     return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3></div>
@@ -383,10 +409,10 @@
       <button class="back" id="boothBack" style="margin-bottom:12px">&larr; Back to ${esc(x.ward)} ward</button>
       <h2 class="scope">Booth ${x.booth}</h2>
       <div class="scope-meta">${esc(x.mandal)} Mandala · ${esc(x.ward)} ward</div>
-      <div class="who"><span>BLO: <b>${esc(x.blo||'—')}</b>${x.bloMob?` (${esc(x.bloMob)})`:''}</span><span>Supervisor: <b>${esc(x.supervisor||'—')}</b></span>${prez}</div>
+      <div class="who"><span>BLO: <b>${esc(x.blo||'—')}</b>${x.bloMob?` (${esc(x.bloMob)})`:''}</span>${prez}</div>
       <div class="bigrow" style="margin-bottom:12px">
         <div class="big"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:clamp(30px,6vw,44px)">${p1(a.coverage)}</div><div class="den">${fmt(x.sirSubmitted)} submitted vs ${fmt(x.mpVoted)} MP-2024 voters</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
-        <div class="big"><div class="cap">Digitized %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div></div>
+        <div class="big"><div class="cap">SIR Submitted %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div></div>
       <div class="delgrid">
         <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
         <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
@@ -417,16 +443,16 @@
   function renderRoster(host,rows){
     const cats=['All'];const counts={All:rows.length};
     for(const r of rows){if(!(r.reason in counts)){counts[r.reason]=0;cats.push(r.reason);}counts[r.reason]++;}
-    let cur='All',q='';
+    let cur='All',q=pendingRosterQ||'';pendingRosterQ='';
     host.innerHTML=`<div class="chips" id="chips">${cats.map(c=>`<button class="chip ${c==='All'?'on':''}" data-c="${esc(c)}">${esc(c)} (${counts[c]})</button>`).join('')}</div>
       <input class="search" id="rq" placeholder="Search name or EPIC…" style="width:100%;margin-bottom:8px" aria-label="Search deletion list">
-      <div class="rostwrap"><table><thead><tr><th>#</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Reason</th></tr></thead><tbody id="rbody"></tbody></table></div>
+      <div class="rostwrap"><table><thead><tr><th title="ECI roll serial number">Sl. No</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Reason</th></tr></thead><tbody id="rbody"></tbody></table></div>
       <div class="scope-meta" id="rcount" style="margin-top:8px"></div>`;
     const body=host.querySelector('#rbody'),rcount=host.querySelector('#rcount');
     const draw=()=>{
       const qq=q.trim().toLowerCase();
       const f=rows.filter(r=>(cur==='All'||r.reason===cur)&&(!qq||(r.name||'').toLowerCase().includes(qq)||(r.epic||'').toLowerCase().includes(qq)));
-      body.innerHTML=f.slice(0,2000).map((r,i)=>`<tr><td class="dim">${i+1}</td><td class="strong">${esc(r.name)}</td><td class="dim">${esc(r.epic)}</td>
+      body.innerHTML=f.slice(0,2000).map((r,i)=>`<tr><td class="dim">${r.serial==null?(i+1):r.serial}</td><td class="strong">${esc(r.name)}</td><td class="dim">${esc(r.epic)}</td>
         <td class="dim">${esc(r.relative)}</td><td class="r">${r.age==null?'—':r.age}</td>
         <td><span class="pill ${REASON_PILL[r.reason]||''}">${esc(r.reason)}</span></td></tr>`).join('')
         ||`<tr><td colspan="6" class="dim" style="text-align:center;padding:20px">No matching voters.</td></tr>`;
@@ -434,7 +460,8 @@
     };
     host.querySelector('#chips').addEventListener('click',e=>{const c=e.target.dataset.c;if(!c)return;
       cur=c;[...host.querySelectorAll('.chip')].forEach(ch=>ch.classList.toggle('on',ch.dataset.c===c));draw();});
-    let tmr;host.querySelector('#rq').addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>{q=v;draw();},200);});
+    const rq=host.querySelector('#rq');if(q)rq.value=q;
+    let tmr;rq.addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>{q=v;draw();},200);});
     draw();
   }
 
@@ -444,9 +471,47 @@
     if(st.level==='booth')parts.push(['Booth '+st.booth,null]);
     c.innerHTML='';
     parts.forEach(([label,target],i)=>{if(i)c.appendChild(el('span',null,'/'));const btn=el('button',target?'':'cur',esc(label));if(target)btn.addEventListener('click',()=>go(target));c.appendChild(btn);});}
-  function applySearch(q){q=q.trim().toLowerCase();if(!q)return;
-    if(/^\d+$/.test(q)){const x=BOOTHS.find(z=>z.booth===+q);if(x){go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});return;}}
-    const hit=BOOTHS.find(z=>z.ward.toLowerCase().includes(q));if(hit){go({level:'ward',mandal:hit.mandal,ward:hit.ward,booth:null});}}
+  async function ensureVoterIdx(){
+    if(VOTERIDX)return VOTERIDX;
+    try{const r=await fetch('./data/voter_index.json',{cache:'no-store'});if(r.ok){VOTERIDX=await r.json();return VOTERIDX;}}catch(e){}
+    if(ROSTERS){const a=[];for(const bk in ROSTERS){const bn=+bk;for(const d of ROSTERS[bk].deletions)a.push([d.epic,d.name,bn,d.serial]);}VOTERIDX=a;return a;}
+    return null;
+  }
+  let searchSeq=0;
+  async function doSearch(raw){
+    const q=raw.trim();
+    if(!q){if(st.level!=='booth')render();return;}     // empty -> restore current view
+    // pure booth number -> jump straight to that booth page
+    if(/^\d+$/.test(q)){const x=BOOTHS.find(b=>b.booth===+q);if(x){go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});return;}}
+    const seq=++searchSeq, ql=q.toLowerCase();
+    const booths=[],wards=[],wset=new Set();
+    for(const b of BOOTHS){if(b.ward.toLowerCase().includes(ql)&&!wset.has(b.ward)){wset.add(b.ward);wards.push(b);if(wards.length>=8)break;}}
+    let voters=[];
+    if(ql.length>=2){const idx=await ensureVoterIdx();if(seq!==searchSeq)return;
+      if(idx){for(const v of idx){if(v[0].toLowerCase().includes(ql)||(v[1]||'').toLowerCase().includes(ql)){voters.push(v);if(voters.length>=60)break;}}}}
+    if(seq!==searchSeq)return;
+    renderSearchResults(q,{booths,wards,voters});
+  }
+  function renderSearchResults(q,r){
+    const wh=r.wards.map(w=>`<button class="sr" data-t="ward" data-ward="${esc(w.ward)}" data-mandal="${esc(w.mandal)}"><span><b>${esc(w.ward)}</b> ward</span><span class="dim">${esc(w.mandal)} mandala</span></button>`).join('');
+    const bh=r.booths.map(x=>`<button class="sr" data-t="booth" data-booth="${x.booth}"><span><b>Booth #${x.booth}</b></span><span class="dim">${esc(x.ward)} · ${esc(x.mandal)}</span></button>`).join('');
+    const vh=r.voters.map(v=>`<button class="sr" data-t="voter" data-booth="${v[2]}" data-epic="${esc(v[0])}"><span><b>${esc(v[1])}</b> <span class="dim">${esc(v[0])}</span></span><span class="dim">Booth #${v[2]}${v[3]!=null?' · Sl.No '+v[3]:''}</span></button>`).join('');
+    const none=!r.wards.length&&!r.booths.length&&!r.voters.length;
+    $('#app').innerHTML=`<h2 class="scope">Search: &ldquo;${esc(q)}&rdquo;</h2>
+      <div class="scope-meta">${r.wards.length} wards · ${r.booths.length} booths · ${r.voters.length} deleted voters matched${r.voters.length>=60?' (first 60 — refine to narrow)':''}</div>
+      ${r.booths.length?`<div class="sect"><h3>Booths</h3></div><div class="srlist">${bh}</div>`:''}
+      ${r.wards.length?`<div class="sect"><h3>Wards</h3></div><div class="srlist">${wh}</div>`:''}
+      ${r.voters.length?`<div class="sect"><h3>Deleted / to-be-deleted voters</h3></div><div class="srlist">${vh}</div>`:''}
+      ${none?`<div class="note">No ward, booth, or deleted voter matches &ldquo;${esc(q)}&rdquo;. Only deleted / to-be-deleted voters are name-searchable.</div>`:''}`;
+    document.querySelectorAll('.sr').forEach(b=>b.addEventListener('click',()=>{
+      const t=b.dataset.t;
+      if(t==='ward')go({level:'ward',mandal:b.dataset.mandal,ward:b.dataset.ward,booth:null});
+      else{const x=BOOTHS.find(z=>z.booth===+b.dataset.booth);if(!x)return;
+        if(t==='voter')pendingRosterQ=b.dataset.epic;
+        go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});}
+    }));
+    updateFoot();
+  }
 
   async function loadData(){
     try{const r=await fetch('./data/ac174.json',{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
@@ -459,7 +524,7 @@
     $('#title').textContent=d.meta.title;$('#subtitle').textContent=d.meta.subtitle;$('#dateBadge').textContent=d.meta.dateBadge;document.title=d.meta.subtitle;
     $('#back').addEventListener('click',()=>history.back());
     $('#mandalFilter').addEventListener('click',e=>{const f=e.target.dataset.f;if(f){st.filter=f;render();}});
-    let tmr;$('#search').addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>applySearch(v),350);});
+    let tmr;$('#search').addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>doSearch(v),300);});
     window.addEventListener('popstate',e=>{const s=e.state||{level:'assembly',mandal:null,ward:null,booth:null};Object.assign(st,s);window.scrollTo(0,0);render();});
     render();
     history.replaceState(snapshot(),'');   // seed the first history entry (assembly view)
