@@ -224,7 +224,10 @@
     return `<div class="legend">`+COMP.map(([nm,k,c])=>`<span><b style="background:${c}"></b>${esc(nm)} — <b style="color:var(--ink)">${fmt(t[k])}</b> (${p1(pct(t[k],tot))})</span>`).join('')+`</div>`;}
 
   let DATA=null,BOOTHS=[],ROSTERS=null,WARDPREZ={};
-  const st={level:'assembly',mandal:null,ward:null,filter:'All',sortKey:'booth',sortDir:1};
+  const st={level:'assembly',mandal:null,ward:null,booth:null,filter:'All',sortKey:'booth',sortDir:1};
+  // history-backed navigation so the browser / phone Back button walks the levels
+  function snapshot(){return {level:st.level,mandal:st.mandal,ward:st.ward,booth:st.booth,filter:st.filter,sortKey:st.sortKey,sortDir:st.sortDir};}
+  function go(ns){Object.assign(st,ns);history.pushState(snapshot(),'');window.scrollTo(0,0);render();}
 
   function scopeBooths(){let b=BOOTHS;
     if(st.filter!=='All'&&st.level==='assembly')b=b.filter(x=>x.mandal===st.filter);
@@ -253,11 +256,12 @@
     return [];}
 
   function render(){
-    const b=scopeBooths(),t=agg(b);
     renderCrumbs(); $('#back').disabled=st.level==='assembly';
     [...$('#mandalFilter').children].forEach(x=>x.classList.toggle('on',x.dataset.f===st.filter));
     $('#mandalFilter').style.opacity=st.level==='assembly'?1:.45;
     $('#mandalFilter').style.pointerEvents=st.level==='assembly'?'auto':'none';
+    if(st.level==='booth'){renderBooth();return;}
+    const b=scopeBooths(),t=agg(b);
 
     const prez = st.level==='ward'&&WARDPREZ[st.ward] ? `<span class="prez">Ward President: ${esc(WARDPREZ[st.ward])}</span>`:'';
     const scopeName=st.level==='assembly'?(st.filter==='All'?'AC-174 Mahadevapura':st.filter+' Mandala')
@@ -307,6 +311,9 @@
 
     $('#app').innerHTML=`<h2 class="scope">${esc(scopeName)}${prez}</h2><div class="scope-meta">${scopeMeta}</div>`+strip+big+panels+comp+childSection;
     wireDots(chItems); if(st.level==='ward')wireTable(); else wireCards();
+    updateFoot();
+  }
+  function updateFoot(){
     $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted<br>Individual deletion entries are from the SIR draft ASDD list dated ${esc(DATA.meta.asddDate||'13-07-2026')}, published by the ERO for public claims &amp; objections. Aggregate delete counts are from the current booth-wise dump.`;
   }
 
@@ -349,11 +356,11 @@
 
   function wireCards(){document.querySelectorAll('.ccard').forEach(c=>c.addEventListener('click',()=>{
     const key=c.dataset.key,type=c.dataset.type;
-    if(type==='mandala'){st.level='mandala';st.mandal=key;st.ward=null;}else if(type==='ward'){st.level='ward';st.ward=key;}
-    window.scrollTo(0,0);render();}));}
+    if(type==='mandala')go({level:'mandala',mandal:key,ward:null,booth:null});
+    else if(type==='ward')go({level:'ward',ward:key,booth:null});}));}
   function wireTable(){
     document.querySelectorAll('th[data-k]').forEach(h=>h.addEventListener('click',()=>{const k=h.dataset.k;if(st.sortKey===k)st.sortDir*=-1;else{st.sortKey=k;st.sortDir=1;}render();}));
-    document.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>openBooth(+r.dataset.booth)));}
+    document.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>go({level:'booth',booth:+r.dataset.booth})));}
   function wireDots(items){const tip=$('#tip');document.querySelectorAll('.dot').forEach(d=>{
     d.addEventListener('mousemove',e=>{const i=+d.dataset.i,a=agg(items[i].rows);
       tip.innerHTML=`<b>${esc(items[i].name)}</b><br>MP ${fmt(a.mpVoted)} · Sub ${fmt(a.sirSubmitted)} · Total ${fmt(a.totalVoters)}`;
@@ -367,38 +374,38 @@
     if(ROSTERS&&ROSTERS[String(n)])return ROSTERS[String(n)];
     return null;
   }
-  async function openBooth(n){
-    const x=BOOTHS.find(z=>z.booth===n);if(!x)return;const a=agg([x]);
-    const cb=covBand(a.coverage),db=digBand(a.digitized);
+  function renderBooth(){
+    const x=BOOTHS.find(z=>z.booth===st.booth);
+    if(!x){go({level:'ward',booth:null});return;}
+    const a=agg([x]);const cb=covBand(a.coverage),db=digBand(a.digitized);
     const prez=WARDPREZ[x.ward]?`<span>Ward President: <b>${esc(WARDPREZ[x.ward])}</b></span>`:'';
-    const ov=el('div','ov');
-    ov.innerHTML=`<div class="modal"><div class="mh"><div><div class="e">${esc(x.mandal)} · ${esc(x.ward)} ward</div><h3>Booth ${x.booth}</h3></div><button class="xbtn" aria-label="Close">✕</button></div>
-      <div class="mbody">
-        <div class="who"><span>BLO: <b>${esc(x.blo||'—')}</b>${x.bloMob?` (${esc(x.bloMob)})`:''}</span><span>Supervisor: <b>${esc(x.supervisor||'—')}</b></span>${prez}</div>
-        <div class="bigrow" style="margin-bottom:12px">
-          <div class="big" style="padding:14px"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:32px">${p1(a.coverage)}</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
-          <div class="big" style="padding:14px"><div class="cap">Digitized</div><div class="num ${db}" style="font-size:32px">${p1(a.digitized)}</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div></div>
-        <div class="delgrid">
-          <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
-          <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
-          <div class="delcell"><div class="dv">${fmt(x.sirSubmitted)}</div><div class="dl">SIR Submitted</div></div>
-          <div class="delcell"><div class="dv">${fmt(x.delTotal)}</div><div class="dl">To Delete</div><div class="dp">${p1(a.deletion)}</div></div></div>
-        ${compBar(a)}
-        <h3 style="font-size:14px;margin:16px 0 2px">Deleted / to-be-deleted voters</h3>
-        <div class="hint" id="rosterNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">as on ${esc(DATA.meta.asddDate||'13-07-2026')} · filter by reason or search name / EPIC</div>
-        <div id="rosterHost"><div class="loading">Loading deletion list…</div></div>
-      </div></div>`;
-    const close=()=>{ov.remove();document.removeEventListener('keydown',onEsc);};
-    const onEsc=e=>{if(e.key==='Escape')close();};
-    ov.addEventListener('click',e=>{if(e.target===ov)close();});
-    ov.querySelector('.xbtn').addEventListener('click',close);
-    document.addEventListener('keydown',onEsc);
-    document.body.appendChild(ov);
-
-    const data=await loadRoster(n);
-    const host=ov.querySelector('#rosterHost');
+    $('#app').innerHTML=`
+      <button class="back" id="boothBack" style="margin-bottom:12px">&larr; Back to ${esc(x.ward)} ward</button>
+      <h2 class="scope">Booth ${x.booth}</h2>
+      <div class="scope-meta">${esc(x.mandal)} Mandala · ${esc(x.ward)} ward</div>
+      <div class="who"><span>BLO: <b>${esc(x.blo||'—')}</b>${x.bloMob?` (${esc(x.bloMob)})`:''}</span><span>Supervisor: <b>${esc(x.supervisor||'—')}</b></span>${prez}</div>
+      <div class="bigrow" style="margin-bottom:12px">
+        <div class="big"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:clamp(30px,6vw,44px)">${p1(a.coverage)}</div><div class="den">${fmt(x.sirSubmitted)} submitted vs ${fmt(x.mpVoted)} MP-2024 voters</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
+        <div class="big"><div class="cap">Digitized %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div></div>
+      <div class="delgrid">
+        <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
+        <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
+        <div class="delcell"><div class="dv">${fmt(x.sirSubmitted)}</div><div class="dl">SIR Submitted</div></div>
+        <div class="delcell"><div class="dv">${fmt(x.delTotal)}</div><div class="dl">To Delete</div><div class="dp">${p1(a.deletion)}</div></div></div>
+      ${compBar(a)}${compLegend(a)}
+      <h3 style="font-size:15px;margin:18px 0 2px">Deleted / to-be-deleted voters</h3>
+      <div class="hint" id="rosterNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">as on ${esc(DATA.meta.asddDate||'13-07-2026')} · filter by reason or search name / EPIC</div>
+      <div id="rosterHost"><div class="loading">Loading deletion list…</div></div>`;
+    $('#boothBack').addEventListener('click',()=>history.back());
+    updateFoot();
+    hydrateBooth(x);
+  }
+  async function hydrateBooth(x){
+    const data=await loadRoster(x.booth);
+    if(st.level!=='booth'||st.booth!==x.booth)return;      // user navigated away while loading
+    const host=$('#rosterHost');if(!host)return;
     if(!data||!data.deletions){host.innerHTML=`<div class="note">Individual deletion list is not published on this build. Current 'to delete' tally for this booth: <b>${fmt(x.delTotal)}</b>. Open the offline/full dashboard to view names.</div>`;return;}
-    const note=ov.querySelector('#rosterNote');
+    const note=$('#rosterNote');
     if(note){
       note.innerHTML = data.total===x.delTotal
         ? `${data.total} names · ASDD list dated ${esc(data.asddDate||DATA.meta.asddDate)} · filter by reason or search name / EPIC`
@@ -431,14 +438,15 @@
     draw();
   }
 
-  function renderCrumbs(){const c=$('#crumbs');const parts=[['Assembly',()=>{st.level='assembly';st.mandal=null;st.ward=null;}]];
-    if(st.mandal)parts.push([st.mandal+' Mandala',()=>{st.level='mandala';st.ward=null;}]);
-    if(st.ward)parts.push([st.ward+' Ward',null]);c.innerHTML='';
-    parts.forEach(([label,fn],i)=>{if(i)c.appendChild(el('span',null,'/'));const btn=el('button',fn?'':'cur',esc(label));if(fn)btn.addEventListener('click',()=>{fn();render();});c.appendChild(btn);});}
-  function goBack(){if(st.level==='ward'){st.level='mandala';st.ward=null;}else if(st.level==='mandala'){st.level='assembly';st.mandal=null;}render();}
+  function renderCrumbs(){const c=$('#crumbs');const parts=[['Assembly',{level:'assembly',mandal:null,ward:null,booth:null}]];
+    if(st.mandal)parts.push([st.mandal+' Mandala',{level:'mandala',ward:null,booth:null}]);
+    if(st.ward)parts.push([st.ward+' Ward', st.level==='booth'?{level:'ward',booth:null}:null]);
+    if(st.level==='booth')parts.push(['Booth '+st.booth,null]);
+    c.innerHTML='';
+    parts.forEach(([label,target],i)=>{if(i)c.appendChild(el('span',null,'/'));const btn=el('button',target?'':'cur',esc(label));if(target)btn.addEventListener('click',()=>go(target));c.appendChild(btn);});}
   function applySearch(q){q=q.trim().toLowerCase();if(!q)return;
-    if(/^\d+$/.test(q)){const x=BOOTHS.find(z=>z.booth===+q);if(x){st.level='ward';st.mandal=x.mandal;st.ward=x.ward;render();setTimeout(()=>openBooth(x.booth),60);return;}}
-    const hit=BOOTHS.find(z=>z.ward.toLowerCase().includes(q));if(hit){st.level='ward';st.mandal=hit.mandal;st.ward=hit.ward;render();}}
+    if(/^\d+$/.test(q)){const x=BOOTHS.find(z=>z.booth===+q);if(x){go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});return;}}
+    const hit=BOOTHS.find(z=>z.ward.toLowerCase().includes(q));if(hit){go({level:'ward',mandal:hit.mandal,ward:hit.ward,booth:null});}}
 
   async function loadData(){
     try{const r=await fetch('./data/ac174.json',{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
@@ -449,10 +457,12 @@
     DATA=d;BOOTHS=d.booths;WARDPREZ=d.meta.wardPresident||{};
     const rb=$('#booth-rosters').textContent.trim();if(rb&&rb!=='null'){try{ROSTERS=JSON.parse(rb);}catch(e){}}
     $('#title').textContent=d.meta.title;$('#subtitle').textContent=d.meta.subtitle;$('#dateBadge').textContent=d.meta.dateBadge;document.title=d.meta.subtitle;
-    $('#back').addEventListener('click',goBack);
+    $('#back').addEventListener('click',()=>history.back());
     $('#mandalFilter').addEventListener('click',e=>{const f=e.target.dataset.f;if(f){st.filter=f;render();}});
     let tmr;$('#search').addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>applySearch(v),350);});
+    window.addEventListener('popstate',e=>{const s=e.state||{level:'assembly',mandal:null,ward:null,booth:null};Object.assign(st,s);window.scrollTo(0,0);render();});
     render();
+    history.replaceState(snapshot(),'');   // seed the first history entry (assembly view)
   }).catch(err=>{$('#app').innerHTML=`<div class="err"><b>Could not load data.</b><br>${esc(err.message)}</div>`;});
 })();
 </script>
