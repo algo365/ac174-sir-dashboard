@@ -220,9 +220,9 @@
   const digBand=d=>d>=55?'g':d>=45?'a':'r';
 
   // Composition of Total Voters = Submitted + 5 deletion categories (sums to total in this data)
-  const COMP=[['Submitted','sirSubmitted','var(--green)'],['Permanently Shifted','permShifted','var(--blue)'],
-    ['Untraceable/Absent','untraceable','var(--amber)'],['EF Refused','efRefused','var(--purple)'],
-    ['Death','death','var(--red)'],['Enrolled Elsewhere','enrolledElsewhere','var(--teal)']];
+  const COMP=[['Submitted','sirSubmitted','var(--green)'],['Permanent Shifting','permShifted','var(--blue)'],
+    ['Absent','untraceable','var(--amber)'],['Others','efRefused','var(--purple)'],
+    ['Death','death','var(--red)'],['Already Enrolled','enrolledElsewhere','var(--teal)']];
   function compBar(t){
     const tot=Math.max(1,t.totalVoters);
     return `<div class="comp">`+COMP.map(([nm,k,c])=>`<span title="${esc(nm)}: ${fmt(t[k])} (${p1(pct(t[k],tot))})" style="width:${100*t[k]/tot}%;background:${c}"></span>`).join('')+`</div>`;
@@ -343,7 +343,7 @@
     updateFoot();
   }
   function updateFoot(){
-    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted<br>Individual deletion entries are from the SIR draft ASDD list dated ${esc(DATA.meta.asddDate||'13-07-2026')}, published by the ERO for public claims &amp; objections. Aggregate delete counts are from the current booth-wise dump.`;
+    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted<br>Individual deletion entries are from the SIR draft ASDD list dated ${esc(DATA.meta.asddDate||'13-07-2026')}, published by the ERO for public claims &amp; objections. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
   }
 
   function cardGrid(cs){return `<div class="cards">`+cs.map(c=>{
@@ -358,9 +358,9 @@
         ${compBar(a)}
         <div class="legend" style="margin-top:6px">
           <span><b style="background:var(--blue)"></b>Shifted ${fmt(a.permShifted)}</span>
-          <span><b style="background:var(--amber)"></b>Untrac. ${fmt(a.untraceable)}</span>
+          <span><b style="background:var(--amber)"></b>Absent ${fmt(a.untraceable)}</span>
           <span><b style="background:var(--red)"></b>Death ${fmt(a.death)}</span>
-          <span><b style="background:var(--purple)"></b>Refused ${fmt(a.efRefused)}</span>
+          <span><b style="background:var(--purple)"></b>Others ${fmt(a.efRefused)}</span>
           <span><b style="background:var(--teal)"></b>Enrolled ${fmt(a.enrolledElsewhere)}</span>
         </div>
         <div class="covline"><span class="n ${cb}">${p1(a.coverage)}</span><span class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></span></div>
