@@ -146,6 +146,9 @@
   .ccard .cb{padding:14px}
   .hl2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
   .hl{border-radius:10px;padding:9px 11px}
+  .hl.tot{background:#e9eff7;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .hl.tot .t{margin:0}
+  .hl.tot .n{color:var(--navy);font-size:21px}
   .hl.sub{background:var(--green-bg)} .hl.del{background:var(--red-bg)}
   .hl .n{font-size:22px;font-weight:800;line-height:1}
   .hl.sub .n{color:var(--green)} .hl.del .n{color:var(--red)}
@@ -407,6 +410,7 @@
     return `<button class="ccard" data-key="${esc(c.key)}" data-type="${c.type}" style="animation-delay:${Math.min(idx,10)*40}ms" aria-label="${esc(c.name)} — ${cta}">
       <div class="ch"><span class="nm">${esc(c.name)}</span><span class="mb">${a.count} booths <span class="chev" aria-hidden="true">›</span></span></div>
       <div class="cb">
+        <div class="hl tot"><div class="t">Total Voters</div><div class="n">${fmt(a.totalVoters)}</div></div>
         <div class="hl2">
           <div class="hl sub"><div class="n">${fmt(a.sirSubmitted)}</div><div class="t">Submitted</div><div class="p">${p1(a.digitized)} of total</div></div>
           <div class="hl del"><div class="n">${fmt(a.delTotal)}</div><div class="t">To Delete</div><div class="p">${p1(a.deletion)} of total</div></div>
