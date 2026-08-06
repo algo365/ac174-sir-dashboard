@@ -109,6 +109,23 @@
   svg.chart{width:100%;height:auto;display:block;overflow:visible}
   .grpclick{cursor:pointer} .grpclick:hover{fill:rgba(37,99,168,.07)}
   th.sorth{cursor:pointer}
+  /* ward PDF report (native print-to-PDF; hidden on screen) */
+  #printarea{display:none}
+  #printarea .prpt{font-family:var(--font);color:#000}
+  #printarea h1{font-size:17px;margin:0 0 2px}
+  #printarea .prsub{font-size:11px;color:#333;margin-bottom:10px}
+  #printarea table.prt{width:100%;border-collapse:collapse;font-size:10px}
+  #printarea .prt th,#printarea .prt td{border:1px solid #999;padding:4px 6px;text-align:left}
+  #printarea .prt th{background:#eaeaea}
+  #printarea .prt td.n,#printarea .prt th.n{text-align:right;font-variant-numeric:tabular-nums}
+  #printarea .prt tr.tot td{font-weight:800;background:#f1f1f1}
+  #printarea .prfoot{font-size:8.5px;color:#555;margin-top:10px}
+  @media print{
+    body.printmode > *{visibility:hidden}
+    body.printmode #printarea{display:block;visibility:visible;position:absolute;inset:0;width:100%}
+    body.printmode #printarea *{visibility:visible}
+    @page{margin:12mm}
+  }
   .pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:12px}
   .pgb{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--navy);box-shadow:var(--sh-sm)}
   .pgb:hover:not([disabled]){background:var(--paper2)} .pgb[disabled]{opacity:.4;cursor:not-allowed}
@@ -238,6 +255,7 @@
 </div>
 
 <div class="tip" id="tip"></div>
+<div id="printarea"></div>
 <script id="ac174-data" type="application/json">null</script>
 <script id="allrows" type="text/plain">null</script>
 <script>
@@ -401,17 +419,56 @@
     const blTitle = st.level==='assembly' ? (st.filter==='All'?'All booths — AC-174 Mahadevapura':'All booths — '+st.filter+' Mandala')
                                           : 'All booths — '+st.mandal+' Mandala';
     let childSection = st.level==='ward' ? boothTable(b)
-      : `<div class="sect"><h3>${st.level==='assembly'?'Mandalas':'Wards'} <span style="color:var(--ink-3);font-weight:600">(${children().length})</span><span class="taphint"><span class="fingr">👆</span> tap a card to open</span></h3></div>`
-        + cardGrid(children()) + boothListSection(b, blTitle);
+      : childrenView() + boothListSection(b, blTitle);
 
     $('#app').innerHTML=`<h2 class="scope">${esc(scopeName)}${prez}</h2><div class="scope-meta">${scopeMeta}</div>`+strip+big+panels+comp+childSection;
-    wireDots(chItems); wireBars(); if(st.level==='ward')wireTable(); else wireCards();
-    if(st.level!=='ward') blDraw();
+    wireDots(chItems); wireBars();
+    if(st.level==='ward'){ wireTable(); }
+    else { drawChildren(); wireChildToggle(); blDraw(); }
     updateFoot();
   }
   function updateFoot(){
     $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br>Individual deletion records (${fmt(DATA.meta.deletedCount||318662)} voters — name, relative, EPIC, serial, age, sex) are from the deletion list dated ${esc(DATA.meta.rosterDate||'2026-08-03')}; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
   }
+
+  // Cards / List toggle for the child grid (mandalas at assembly, wards at mandala)
+  let _childView='cards', _clKey='coverage', _clDir=1;
+  function childrenView(){
+    const cs=children();
+    return `<div class="sect"><h3>${st.level==='assembly'?'Mandalas':'Wards'} <span style="color:var(--ink-3);font-weight:600">(${cs.length})</span>${_childView==='cards'?`<span class="taphint"><span class="fingr">👆</span> tap a card to open</span>`:''}</h3>
+      <div class="seg childview" role="group" aria-label="View"><button data-v="cards" class="${_childView==='cards'?'on':''}">▦ Cards</button><button data-v="list" class="${_childView==='list'?'on':''}">☰ List</button></div></div>
+      <div id="childwrap"></div>`;
+  }
+  function drawChildren(){
+    const host=$('#childwrap'); if(!host)return; const cs=children();
+    if(_childView==='list'){ host.innerHTML=childListHTML(cs); wireChildList(); }
+    else { host.innerHTML=cardGrid(cs); wireCards(); }
+  }
+  function childListHTML(cs){
+    const nameLabel=st.level==='assembly'?'Mandala':'Ward';
+    const rows=cs.map(c=>{const a=agg(c.rows);return {key:c.key,type:c.type,name:c.name,
+      totalVoters:a.totalVoters,sirSubmitted:a.sirSubmitted,delTotal:a.delTotal,digitized:a.digitized,coverage:a.coverage};});
+    rows.sort((p,q)=>{const A=p[_clKey],B=q[_clKey];return((A>B)-(A<B))*_clDir;});
+    const cols=[['name',nameLabel,0],['totalVoters','Total',1],['sirSubmitted','Submitted',1],['delTotal','To Delete',1],['digitized','SIR Sub %',1],['coverage','MP %',1]];
+    const head=cols.map(([k,l,r])=>`<th class="${r?'r':''} sorth" data-k="${k}">${l}${_clKey===k?`<span class="ar">${_clDir>0?'▲':'▼'}</span>`:''}</th>`).join('');
+    const body=rows.map(r=>{const cb=covBand(r.coverage),db=digBand(r.digitized);
+      return `<tr data-key="${esc(r.key)}" data-type="${r.type}"><td class="strong">${esc(r.name)}</td>
+        <td class="r">${fmt(r.totalVoters)}</td><td class="r">${fmt(r.sirSubmitted)}</td><td class="r">${fmt(r.delTotal)}</td>
+        <td class="r"><span class="pill ${db}">${p1(r.digitized)}</span></td><td class="r"><span class="pill ${cb}">${p1(r.coverage)}</span></td></tr>`;}).join('');
+    return `<div class="hint" style="margin:-2px 0 8px">Tap a column header to sort ascending / descending · tap a row to open.</div>
+      <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+  function wireChildList(){
+    document.querySelectorAll('#childwrap th.sorth').forEach(h=>h.addEventListener('click',()=>{const k=h.dataset.k;
+      if(_clKey===k)_clDir*=-1; else {_clKey=k;_clDir=(k==='name'?1:-1);} drawChildren();}));
+    document.querySelectorAll('#childwrap tr[data-key]').forEach(r=>r.addEventListener('click',()=>{
+      const key=r.dataset.key,type=r.dataset.type;
+      if(type==='mandala')go({level:'mandala',mandal:key,ward:null,booth:null}); else go({level:'ward',ward:key,booth:null});}));
+  }
+  function wireChildToggle(){document.querySelectorAll('.childview button').forEach(b=>b.addEventListener('click',()=>{
+    _childView=b.dataset.v; drawChildren();
+    document.querySelectorAll('.childview button').forEach(x=>x.classList.toggle('on',x.dataset.v===_childView));
+    document.querySelectorAll('.childview').forEach(()=>{}); const th=$('.sect .taphint'); if(th)th.style.display=_childView==='cards'?'':'none';}));}
 
   function cardGrid(cs){return `<div class="cards">`+cs.map((c,idx)=>{
     const a=agg(c.rows),cb=covBand(a.coverage),db=digBand(a.digitized);
@@ -446,8 +503,25 @@
         <td class="r">${fmt(v.totalVoters)}</td>
         <td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td><td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td>
         <td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td></tr>`;}).join('');
-    return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3></div>
+    return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3>
+        <button class="back" id="pdfBtn">⬇ Download PDF</button></div>
       <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;}
+  function downloadWardPDF(){
+    const wb=BOOTHS.filter(z=>z.ward===st.ward).slice().sort((a,z)=>a.booth-z.booth);
+    const t=agg(wb);
+    const body=wb.map(x=>{const a=agg([x]);return `<tr><td>#${x.booth}</td><td>${esc(x.blo||'—')}</td><td class="n">${fmt(x.totalVoters)}</td><td class="n">${p1(a.digitized)}</td><td class="n">${p1(a.coverage)}</td><td class="n">${fmt(x.mpVoted)}</td><td class="n">${fmt(x.sirSubmitted)}</td><td class="n">${fmt(x.delTotal)}</td></tr>`;}).join('');
+    $('#printarea').innerHTML=`<div class="prpt">
+      <h1>AC-174 Mahadevapura — ${esc(st.ward)} Ward</h1>
+      <div class="prsub">Booth-wise SIR digitization status · ${esc(st.mandal)} Mandala · ${wb.length} booths · aggregate as on ${esc(DATA.meta.aggAsOf||'2026-08-06')}</div>
+      <table class="prt"><thead><tr><th>Booth</th><th>BLO</th><th class="n">Total</th><th class="n">SIR Sub %</th><th class="n">MP %</th><th class="n">MP Voted</th><th class="n">SIR Submitted</th><th class="n">SIR Delete</th></tr></thead>
+      <tbody><tr class="tot"><td colspan="2">WARD TOTAL</td><td class="n">${fmt(t.totalVoters)}</td><td class="n">${p1(t.digitized)}</td><td class="n">${p1(t.coverage)}</td><td class="n">${fmt(t.mpVoted)}</td><td class="n">${fmt(t.sirSubmitted)}</td><td class="n">${fmt(t.delTotal)}</td></tr>${body}</tbody></table>
+      <div class="prfoot">MP Voted = 2024 Lok Sabha votes polled · MP % (coverage) = SIR Submitted ÷ MP Voted · SIR Sub % = SIR Submitted ÷ Total Voters · SIR Submitted = EFs digitized. Generated from the AC-174 SIR dashboard.</div></div>`;
+    const oldTitle=document.title; document.title=`AC174_${st.ward}_booths`.replace(/\s+/g,'_');
+    document.body.classList.add('printmode');
+    const done=()=>{document.body.classList.remove('printmode');document.title=oldTitle;window.removeEventListener('afterprint',done);};
+    window.addEventListener('afterprint',done);
+    setTimeout(()=>{window.print();},60);
+  }
 
   // paginated "all booths in scope" list (below the cards at assembly/mandala level)
   let _blBooths=[], _blPage=0, _blKey='coverage', _blDir=1; const BL_SIZE=20;
@@ -491,7 +565,8 @@
     else if(type==='ward')go({level:'ward',ward:key,booth:null});}));}
   function wireTable(){
     document.querySelectorAll('th[data-k]').forEach(h=>h.addEventListener('click',()=>{const k=h.dataset.k;if(st.sortKey===k)st.sortDir*=-1;else{st.sortKey=k;st.sortDir=1;}render();}));
-    document.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>go({level:'booth',booth:+r.dataset.booth})));}
+    document.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>go({level:'booth',booth:+r.dataset.booth})));
+    const pb=$('#pdfBtn'); if(pb)pb.addEventListener('click',downloadWardPDF);}
   function wireDots(items){const tip=$('#tip');document.querySelectorAll('.dot').forEach(d=>{
     d.addEventListener('mousemove',e=>{const i=+d.dataset.i,a=agg(items[i].rows);
       tip.innerHTML=`<b>${esc(items[i].name)}</b><br>MP ${fmt(a.mpVoted)} · Sub ${fmt(a.sirSubmitted)} · Total ${fmt(a.totalVoters)}`;
