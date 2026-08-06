@@ -304,8 +304,22 @@
   const hasEmbedded=()=>{const e=$('#allrows').textContent;return e&&e.trim()&&e.trim()!=='null';};
   const st={level:'assembly',mandal:null,ward:null,booth:null,filter:'All',sortKey:'booth',sortDir:1};
   // history-backed navigation so the browser / phone Back button walks the levels
-  function snapshot(){return {level:st.level,mandal:st.mandal,ward:st.ward,booth:st.booth,filter:st.filter,sortKey:st.sortKey,sortDir:st.sortDir};}
-  function go(ns){Object.assign(st,ns);history.pushState(snapshot(),'');window.scrollTo(0,0);render();}
+  // shareable URLs: state <-> location.hash  (#/, #/m/<mandal>, #/w/<ward>, #/b/<booth>)
+  function stateToHash(){
+    if(st.level==='mandala')return '#/m/'+encodeURIComponent(st.mandal);
+    if(st.level==='ward')return '#/w/'+encodeURIComponent(st.ward);
+    if(st.level==='booth')return '#/b/'+st.booth;
+    return '#/';
+  }
+  function go(ns){Object.assign(st,ns);const h=stateToHash();if(location.hash!==h){location.hash=h;}else{window.scrollTo(0,0);render();}}
+  function applyHash(){
+    const seg=(location.hash||'').replace(/^#\/?/,'').split('/');
+    let ns={level:'assembly',mandal:null,ward:null,booth:null};
+    if(seg[0]==='m'&&seg[1]){ns={level:'mandala',mandal:decodeURIComponent(seg[1]),ward:null,booth:null};}
+    else if(seg[0]==='w'&&seg[1]){const w=decodeURIComponent(seg[1]);const b=BOOTHS.find(x=>x.ward===w);ns={level:'ward',mandal:b?b.mandal:null,ward:w,booth:null};}
+    else if(seg[0]==='b'&&seg[1]){const bn=+seg[1];const b=BOOTHS.find(x=>x.booth===bn);if(b)ns={level:'booth',mandal:b.mandal,ward:b.ward,booth:bn};}
+    Object.assign(st,ns);window.scrollTo(0,0);render();
+  }
 
   function scopeBooths(){let b=BOOTHS;
     if(st.filter!=='All'&&st.level==='assembly')b=b.filter(x=>x.mandal===st.filter);
@@ -712,9 +726,8 @@
     $('#back').addEventListener('click',()=>history.back());
     $('#mandalFilter').addEventListener('click',e=>{const f=e.target.dataset.f;if(f){st.filter=f;render();}});
     let tmr;$('#search').addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>doSearch(v),300);});
-    window.addEventListener('popstate',e=>{const s=e.state||{level:'assembly',mandal:null,ward:null,booth:null};Object.assign(st,s);window.scrollTo(0,0);render();});
-    render();
-    history.replaceState(snapshot(),'');   // seed the first history entry (assembly view)
+    window.addEventListener('hashchange',applyHash);   // browser Back/Forward + shared links
+    applyHash();                                       // open whatever the URL points to (defaults to assembly)
   }).catch(err=>{$('#app').innerHTML=`<div class="err"><b>Could not load data.</b><br>${esc(err.message)}</div>`;});
 })();
 </script>
