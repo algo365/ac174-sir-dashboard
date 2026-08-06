@@ -108,6 +108,11 @@
 
   svg.chart{width:100%;height:auto;display:block;overflow:visible}
   .grpclick{cursor:pointer} .grpclick:hover{fill:rgba(37,99,168,.07)}
+  th.sorth{cursor:pointer}
+  .pager{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-top:12px}
+  .pgb{border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:700;color:var(--navy);box-shadow:var(--sh-sm)}
+  .pgb:hover:not([disabled]){background:var(--paper2)} .pgb[disabled]{opacity:.4;cursor:not-allowed}
+  .pgi{font-size:12.5px;color:var(--ink-2);font-weight:700;padding:0 6px}
   .dot{cursor:pointer}
   .tip{position:fixed;pointer-events:none;background:var(--navy);color:#fff;font-size:12px;
     padding:7px 10px;border-radius:8px;box-shadow:var(--sh-md);opacity:0;transition:opacity .1s;z-index:60;white-space:nowrap}
@@ -393,11 +398,15 @@
       <div class="hint">Submitted ${fmt(t.sirSubmitted)} (${p1(t.digitized)}) + to-delete ${fmt(t.delTotal)} (${p1(t.deletion)})</div>
       ${compBar(t)}${compLegend(t)}</div>`;
 
+    const blTitle = st.level==='assembly' ? (st.filter==='All'?'All booths — AC-174 Mahadevapura':'All booths — '+st.filter+' Mandala')
+                                          : 'All booths — '+st.mandal+' Mandala';
     let childSection = st.level==='ward' ? boothTable(b)
-      : `<div class="sect"><h3>${st.level==='assembly'?'Mandalas':'Wards'} <span style="color:var(--ink-3);font-weight:600">(${children().length})</span><span class="taphint"><span class="fingr">👆</span> tap a card to open</span></h3></div>`+cardGrid(children());
+      : `<div class="sect"><h3>${st.level==='assembly'?'Mandalas':'Wards'} <span style="color:var(--ink-3);font-weight:600">(${children().length})</span><span class="taphint"><span class="fingr">👆</span> tap a card to open</span></h3></div>`
+        + cardGrid(children()) + boothListSection(b, blTitle);
 
     $('#app').innerHTML=`<h2 class="scope">${esc(scopeName)}${prez}</h2><div class="scope-meta">${scopeMeta}</div>`+strip+big+panels+comp+childSection;
     wireDots(chItems); wireBars(); if(st.level==='ward')wireTable(); else wireCards();
+    if(st.level!=='ward') blDraw();
     updateFoot();
   }
   function updateFoot(){
@@ -424,8 +433,8 @@
       </div></button>`;}).join('')+`</div>`;}
 
   const COLS=[['booth','Booth',0],['blo','BLO',0],['totalVoters','Total Voters',1],
-    ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1],
-    ['coverage','MP %',1],['digitized','Sub %',1]];
+    ['digitized','SIR Sub %',1],['coverage','MP %',1],
+    ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1]];
   function rowVals(x){const a=agg([x]);return {booth:x.booth,blo:x.blo||'—',
     totalVoters:x.totalVoters,mpVoted:x.mpVoted,sirSubmitted:x.sirSubmitted,delTotal:x.delTotal,coverage:a.coverage,digitized:a.digitized};}
   function boothTable(b){
@@ -434,10 +443,47 @@
     const head=COLS.map(([k,l,r])=>`<th class="${r?'r':''}" data-k="${k}">${l}${st.sortKey===k?`<span class="ar">${st.sortDir>0?'▲':'▼'}</span>`:''}</th>`).join('');
     const body=rows.map(v=>{const cb=covBand(v.coverage),db=digBand(v.digitized);
       return `<tr data-booth="${v.booth}"><td class="strong">#${v.booth}</td><td class="dim">${esc(v.blo)}</td>
-        <td class="r">${fmt(v.totalVoters)}</td><td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td>
-        <td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td><td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td></tr>`;}).join('');
+        <td class="r">${fmt(v.totalVoters)}</td>
+        <td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td><td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td>
+        <td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td></tr>`;}).join('');
     return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3></div>
       <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;}
+
+  // paginated "all booths in scope" list (below the cards at assembly/mandala level)
+  let _blBooths=[], _blPage=0, _blKey='coverage', _blDir=1; const BL_SIZE=20;
+  function boothListSection(booths, title){
+    _blBooths=booths; _blPage=0; _blKey='coverage'; _blDir=1;   // default: sort by MP % then SIR Sub %
+    return `<div class="panel" style="margin-bottom:16px"><div class="sect" style="margin:0 0 6px"><h3>${esc(title)} <span style="color:var(--ink-3);font-weight:600">(${booths.length})</span></h3></div>
+      <div class="hint" style="margin-bottom:8px">Sorted by MP % then SIR Submitted % · 20 per page · tap a row to open the booth · tap a % header to re-sort.</div>
+      <div id="bl"></div></div>`;
+  }
+  function blDraw(){
+    const host=$('#bl'); if(!host)return;
+    const rows=_blBooths.map(x=>({ward:x.ward,booth:x.booth,mandal:x.mandal,
+      coverage:pct(x.sirSubmitted,x.mpVoted), digitized:pct(x.sirSubmitted,x.totalVoters)}));
+    rows.sort((a,b)=>{const p=(a[_blKey]-b[_blKey])*_blDir; return p || (a.coverage-b.coverage) || (a.digitized-b.digitized);});
+    const pages=Math.max(1,Math.ceil(rows.length/BL_SIZE));
+    _blPage=Math.min(Math.max(0,_blPage),pages-1);
+    const slice=rows.slice(_blPage*BL_SIZE, _blPage*BL_SIZE+BL_SIZE);
+    const arw=k=>_blKey===k?`<span class="ar">${_blDir>0?'▲':'▼'}</span>`:'';
+    host.innerHTML=`<div class="tablewrap"><table><thead><tr>
+        <th>Ward</th><th>Booth</th>
+        <th class="r sorth" data-k="coverage">MP %${arw('coverage')}</th>
+        <th class="r sorth" data-k="digitized">SIR Sub %${arw('digitized')}</th></tr></thead>
+      <tbody>${slice.map(r=>`<tr data-booth="${r.booth}"><td class="dim">${esc(r.ward)}</td><td class="strong">#${r.booth}</td>
+        <td class="r"><span class="pill ${covBand(r.coverage)}">${p1(r.coverage)}</span></td>
+        <td class="r"><span class="pill ${digBand(r.digitized)}">${p1(r.digitized)}</span></td></tr>`).join('')}</tbody></table></div>
+      <div class="pager">
+        <button class="pgb" data-p="first" ${_blPage===0?'disabled':''}>« First</button>
+        <button class="pgb" data-p="prev" ${_blPage===0?'disabled':''}>‹ Prev</button>
+        <span class="pgi">Page ${_blPage+1} / ${pages} · ${fmt(rows.length)} booths</span>
+        <button class="pgb" data-p="next" ${_blPage>=pages-1?'disabled':''}>Next ›</button>
+        <button class="pgb" data-p="last" ${_blPage>=pages-1?'disabled':''}>Last »</button></div>`;
+    host.querySelectorAll('.sorth').forEach(h=>h.addEventListener('click',()=>{const k=h.dataset.k;if(_blKey===k)_blDir*=-1;else{_blKey=k;_blDir=1;}_blPage=0;blDraw();}));
+    host.querySelectorAll('.pgb').forEach(btn=>btn.addEventListener('click',()=>{const p=btn.dataset.p;
+      if(p==='first')_blPage=0;else if(p==='prev')_blPage--;else if(p==='next')_blPage++;else _blPage=pages-1;blDraw();window.scrollTo({top:host.getBoundingClientRect().top+window.scrollY-80,behavior:'instant'});}));
+    host.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>{const x=_blBooths.find(z=>z.booth===+r.dataset.booth);if(x)go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});}));
+  }
 
   function wireCards(){document.querySelectorAll('.ccard').forEach(c=>c.addEventListener('click',()=>{
     const key=c.dataset.key,type=c.dataset.type;
