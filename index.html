@@ -291,6 +291,11 @@
     ).join('')+`</div>`;}
 
   let DATA=null,BOOTHS=[],ALLROWS=null,WARDPREZ={},pendingRosterQ='';
+  // Data lives with the page (AWS S3 website / offline). On GitHub Pages the repo is
+  // just this HTML shell, so pull data from the AWS S3 bucket over HTTPS (CORS-enabled).
+  const DATA_BASE = location.hostname.endsWith('github.io')
+    ? 'https://ac174-sir-dashboard-560151615764.s3.ap-south-1.amazonaws.com/'
+    : './';
   // parse the tab-separated deleted-voter dataset once: booth,serial,epic,name,sex,age,relative,reason
   function parseTSV(text){const out=[];for(const ln of text.split('\n')){if(!ln)continue;const p=ln.split('\t');
     out.push({booth:+p[0],serial:p[1],epic:p[2],name:p[3],sex:p[4],age:p[5],relative:p[6],reason:p[7],
@@ -300,7 +305,7 @@
     if(ALLROWS)return ALLROWS;
     const emb=$('#allrows').textContent;
     if(emb&&emb.trim()&&emb.trim()!=='null'){ALLROWS=parseTSV(emb.trim());return ALLROWS;}
-    const r=await fetch('./data/search.tsv',{cache:'no-store'});ALLROWS=parseTSV(await r.text());return ALLROWS;}
+    const r=await fetch(DATA_BASE+'data/search.tsv',{cache:'no-store'});ALLROWS=parseTSV(await r.text());return ALLROWS;}
   const hasEmbedded=()=>{const e=$('#allrows').textContent;return e&&e.trim()&&e.trim()!=='null';};
   const st={level:'assembly',mandal:null,ward:null,booth:null,filter:'All',sortKey:'booth',sortDir:1};
   // history-backed navigation so the browser / phone Back button walks the levels
@@ -589,7 +594,7 @@
 
   const REASON_PILL={'Death':'death','Permanently Shifted':'shift','Untraceable/Absent':'untr','EF Refused':'refuse','Enrolled at another place':'enrol','Marked for Deletion':'shift'};
   async function loadRoster(n){
-    try{const r=await fetch(`./data/booth/${n}.json`,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
+    try{const r=await fetch(`${DATA_BASE}data/booth/${n}.json`,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
     if(hasEmbedded()){                                   // offline: derive booth roster from embedded dataset
       const all=await ensureAllRows();
       const rows=all.filter(r=>r.booth===n).map(r=>[r.serial,r.epic,r.name,r.sex,r.age,r.relative,r.reason]);
@@ -715,7 +720,7 @@
   }
 
   async function loadData(){
-    try{const r=await fetch('./data/ac174.json',{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
+    try{const r=await fetch(DATA_BASE+'data/ac174.json',{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
     const inline=$('#ac174-data').textContent.trim();if(inline&&inline!=='null')return JSON.parse(inline);
     throw new Error('No data: expected ./data/ac174.json or embedded data.');}
 

@@ -1,3 +1,6 @@
 
 # 22MB offline single-file — keep out of the served repo (provided separately)
 AC174_SIR_Dashboard_offline.html
+
+# data served from AWS S3, not GitHub (keeps repo tiny -> Pages publishes fast)
+data/
