@@ -290,7 +290,44 @@
       `<div class="cli"><i class="sw" style="background:${c}"></i><span class="cl-nm">${esc(nm)}</span><b class="cl-n">${fmt(t[k])}</b><span class="cl-p">${p1(pct(t[k],tot))}</span></div>`
     ).join('')+`</div>`;}
 
-  let DATA=null,BOOTHS=[],ALLROWS=null,WARDPREZ={},pendingRosterQ='';
+  let DATA=null,BOOTHS=[],ALLROWS=null,WARDPREZ={},pendingRosterQ='',SUMMARY=null,boothsLoading=null;
+  // Incremental load: the landing uses a tiny summary.json (per-mandala/ward aggregates);
+  // the full 527-booth detail is fetched lazily only when a booth list/table/page is opened.
+  function totalsToAgg(t){t=t||{};const o={};SUM.forEach(k=>o[k]=t[k]||0);o.count=t.count||0;
+    o.coverage=pct(o.sirSubmitted,o.mpVoted);o.digitized=pct(o.sirSubmitted,o.totalVoters);
+    o.deletion=pct(o.delTotal,o.totalVoters);o.turnout=pct(o.mpVoted,o.totalVoters);
+    o.notSubmitted=o.totalVoters-o.sirSubmitted;o.votedGap=o.mpVoted-o.sirSubmitted;return o;}
+  function scopeAgg(){
+    if(BOOTHS.length)return agg(scopeBooths());
+    if(!SUMMARY)return totalsToAgg({});
+    if(st.level==='assembly')return totalsToAgg(st.filter==='All'?SUMMARY.assembly:SUMMARY.mandalas[st.filter]);
+    if(st.level==='mandala')return totalsToAgg(SUMMARY.mandalas[st.mandal]);
+    if(st.level==='ward')return totalsToAgg(SUMMARY.wards[st.ward]);
+    return totalsToAgg({});}
+  function childSummary(){
+    if(BOOTHS.length)return children().map(c=>({key:c.key,name:c.name,type:c.type,a:agg(c.rows)}));
+    if(!SUMMARY)return [];
+    if(st.level==='assembly'){const ms=st.filter==='All'?SUMMARY.meta.mandals:[st.filter];
+      return ms.filter(m=>SUMMARY.mandalas[m]).map(m=>({key:m,name:m+' Mandala',type:'mandala',a:totalsToAgg(SUMMARY.mandalas[m])}));}
+    if(st.level==='mandala')return Object.keys(SUMMARY.wards).filter(w=>SUMMARY.wards[w].mandal===st.mandal).sort()
+      .map(w=>({key:w,name:w,type:'ward',a:totalsToAgg(SUMMARY.wards[w])}));
+    return [];}
+  function wardsInScope(){
+    if(st.level==='ward')return 0;
+    if(BOOTHS.length)return new Set(scopeBooths().map(x=>x.ward)).size;
+    if(!SUMMARY)return 0;
+    if(st.level==='mandala')return Object.values(SUMMARY.wards).filter(v=>v.mandal===st.mandal).length;
+    return st.filter==='All'?DATA.meta.wardCount:Object.values(SUMMARY.wards).filter(v=>v.mandal===st.filter).length;}
+  // lazy-load the full booth detail (once); cb runs when ready
+  function ensureBooths(cb){
+    if(BOOTHS.length){cb&&cb();return;}
+    if(!boothsLoading){boothsLoading=(async()=>{
+      let d=null; const emb=$('#ac174-data').textContent.trim();
+      if(emb&&emb!=='null'){try{d=JSON.parse(emb);}catch(e){}}
+      if(!d){try{const r=await fetch(DATA_BASE+'data/ac174.json',{cache:'no-store'});if(r.ok)d=await r.json();}catch(e){}}
+      if(d&&d.booths)BOOTHS=d.booths;
+    })();}
+    boothsLoading.then(()=>cb&&cb());}
   // Data lives with the page (AWS S3 website / offline). On GitHub Pages the repo is
   // just this HTML shell, so pull data from the AWS S3 bucket over HTTPS (CORS-enabled).
   const DATA_BASE = location.hostname.endsWith('github.io')
@@ -321,8 +358,8 @@
     const seg=(location.hash||'').replace(/^#\/?/,'').split('/');
     let ns={level:'assembly',mandal:null,ward:null,booth:null};
     if(seg[0]==='m'&&seg[1]){ns={level:'mandala',mandal:decodeURIComponent(seg[1]),ward:null,booth:null};}
-    else if(seg[0]==='w'&&seg[1]){const w=decodeURIComponent(seg[1]);const b=BOOTHS.find(x=>x.ward===w);ns={level:'ward',mandal:b?b.mandal:null,ward:w,booth:null};}
-    else if(seg[0]==='b'&&seg[1]){const bn=+seg[1];const b=BOOTHS.find(x=>x.booth===bn);if(b)ns={level:'booth',mandal:b.mandal,ward:b.ward,booth:bn};}
+    else if(seg[0]==='w'&&seg[1]){const w=decodeURIComponent(seg[1]);const mandal=(SUMMARY&&SUMMARY.wards[w])?SUMMARY.wards[w].mandal:(BOOTHS.find(x=>x.ward===w)||{}).mandal;ns={level:'ward',mandal:mandal||null,ward:w,booth:null};}
+    else if(seg[0]==='b'&&seg[1]){ns={level:'booth',mandal:null,ward:null,booth:+seg[1]};}
     Object.assign(st,ns);window.scrollTo(0,0);render();
   }
 
@@ -386,13 +423,14 @@
     $('#mandalFilter').style.opacity=st.level==='assembly'?1:.45;
     $('#mandalFilter').style.pointerEvents=st.level==='assembly'?'auto':'none';
     if(st.level==='booth'){renderBooth();return;}
-    const b=scopeBooths(),t=agg(b);
+    const wardNeedsBooths = st.level==='ward' && !BOOTHS.length;
+    const t=scopeAgg();
 
     const prez = st.level==='ward'&&WARDPREZ[st.ward] ? `<span class="prez">Ward President: ${esc(WARDPREZ[st.ward])}</span>`:'';
     const scopeName=st.level==='assembly'?(st.filter==='All'?'AC-174 Mahadevapura':st.filter+' Mandala')
       :st.level==='mandala'?st.mandal+' Mandala':st.ward+' — Ward';
     const scopeMeta=st.level==='ward'?`${t.count} booths · ${fmt(t.totalVoters)} voters`
-      :`${t.count} booths · ${new Set(b.map(x=>x.ward)).size} wards · ${fmt(t.totalVoters)} voters`;
+      :`${t.count} booths · ${wardsInScope()} wards · ${fmt(t.totalVoters)} voters`;
 
     const kpi=(v,l,cls='')=>`<div class="kpi"><div class="v ${cls}">${v}</div><div class="l">${l}</div></div>`;
     const strip=`<div class="kpis">
@@ -412,39 +450,48 @@
         <div class="den">${fmt(t.sirSubmitted)} submitted of ${fmt(t.totalVoters)} total voters</div>
         <div class="prog"><i class="${db}" style="width:${Math.min(100,t.digitized)}%"></i></div></div></div>`;
 
-    const chItems=st.level==='ward'?[...b].sort((a,z)=>a.booth-z.booth).map(x=>({name:'#'+x.booth,rows:[x]})):children();
-    const labels=chItems.map(c=>c.name),aggs=chItems.map(c=>agg(c.rows));
-    const voted=aggs.map(a=>a.mpVoted),sub=aggs.map(a=>a.sirSubmitted),tv=aggs.map(a=>a.totalVoters);
-    const clabel=st.level==='ward'?'booths':(st.level==='assembly'?'mandalas':'wards');
-    const one=clabel.slice(0,-1);
-    const barItems=chItems.map((c,idx)=>({name:c.name,a:aggs[idx],
-      target: st.level==='ward' ? {level:'booth',mandal:c.rows[0].mandal,ward:c.rows[0].ward,booth:c.rows[0].booth}
-            : c.type==='mandala' ? {level:'mandala',mandal:c.key,ward:null,booth:null}
-            : {level:'ward',ward:c.key,booth:null} }));
-    _barTargets=barItems.map(x=>x.target);
-    const gapC=t.votedGap>0?`<div class="callout">▲ ${fmt(t.votedGap)} MP-2024 voters with no SIR form (Total EFs still to submit)</div>`
-      :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ SIR Submitted covers all ${fmt(t.mpVoted)} MP-2024 voters${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
-    const subC=`<div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} total voters not yet submitted</div>`;
-    const panels=`<div class="panel" style="margin-bottom:16px">
-      <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete</h3>
-      <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · % above each group = Digitized %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
-      ${groupedBar(barItems)}
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">${gapC}${subC}</div></div>`;
+    let panels, chItems=[];
+    if(wardNeedsBooths){
+      panels=`<div class="panel" style="margin-bottom:16px"><div class="loading">Loading booth details…</div></div>`;
+    }else{
+      chItems = st.level==='ward'
+        ? scopeBooths().slice().sort((a,z)=>a.booth-z.booth).map(x=>({name:'#'+x.booth,a:agg([x]),mandal:x.mandal,ward:x.ward,booth:x.booth}))
+        : childSummary();
+      const clabel=st.level==='ward'?'booths':(st.level==='assembly'?'mandalas':'wards');
+      const one=clabel.slice(0,-1);
+      const barItems=chItems.map(c=>({name:c.name,a:c.a,
+        target: st.level==='ward' ? {level:'booth',mandal:c.mandal,ward:c.ward,booth:c.booth}
+              : c.type==='mandala' ? {level:'mandala',mandal:c.key,ward:null,booth:null}
+              : {level:'ward',ward:c.key,booth:null} }));
+      _barTargets=barItems.map(x=>x.target);
+      const gapC=t.votedGap>0?`<div class="callout">▲ ${fmt(t.votedGap)} MP-2024 voters with no SIR form (Total EFs still to submit)</div>`
+        :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ SIR Submitted covers all ${fmt(t.mpVoted)} MP-2024 voters${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
+      const subC=`<div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} total voters not yet submitted</div>`;
+      panels=`<div class="panel" style="margin-bottom:16px">
+        <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete</h3>
+        <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · % above each group = Digitized %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
+        ${groupedBar(barItems)}
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">${gapC}${subC}</div></div>`;
+    }
 
     const comp=`<div class="panel" style="margin-bottom:16px"><h3>Composition of ${fmt(t.totalVoters)} voters — Submitted vs deletion categories</h3>
       <div class="hint">Submitted ${fmt(t.sirSubmitted)} (${p1(t.digitized)}) + to-delete ${fmt(t.delTotal)} (${p1(t.deletion)})</div>
       ${compBar(t)}${compLegend(t)}</div>`;
 
-    const blTitle = st.level==='assembly' ? (st.filter==='All'?'All booths — AC-174 Mahadevapura':'All booths — '+st.filter+' Mandala')
-                                          : 'All booths — '+st.mandal+' Mandala';
-    let childSection = st.level==='ward' ? boothTable(b)
-      : childrenView() + boothListSection(b, blTitle);
+    let childSection;
+    if(st.level==='ward'){
+      childSection = wardNeedsBooths ? `<div class="panel"><div class="loading">Loading booths…</div></div>` : boothTable(scopeBooths());
+    }else{
+      const blTitle = st.level==='assembly' ? (st.filter==='All'?'All booths — AC-174 Mahadevapura':'All booths — '+st.filter+' Mandala') : 'All booths — '+st.mandal+' Mandala';
+      childSection = childrenView() + boothListSection(blTitle);
+    }
 
     $('#app').innerHTML=`<h2 class="scope">${esc(scopeName)}${prez}</h2><div class="scope-meta">${scopeMeta}</div>`+strip+big+panels+comp+childSection;
-    wireDots(chItems); wireBars();
-    if(st.level==='ward'){ wireTable(); }
-    else { drawChildren(); wireChildToggle(); blDraw(); }
+    if(!wardNeedsBooths){ wireDots(chItems); wireBars(); }
+    if(st.level==='ward'){ if(!wardNeedsBooths) wireTable(); }
+    else { drawChildren(); wireChildToggle(); blInit(); }
     updateFoot();
+    if(wardNeedsBooths) ensureBooths(()=>{ if(st.level==='ward') render(); });
   }
   function updateFoot(){
     $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br>Individual deletion records (${fmt(DATA.meta.deletedCount||318662)} voters — name, relative, EPIC, serial, age, sex) are from the deletion list dated ${esc(DATA.meta.rosterDate||'2026-08-03')}; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
@@ -453,19 +500,19 @@
   // Cards / List toggle for the child grid (mandalas at assembly, wards at mandala)
   let _childView='cards', _clKey='coverage', _clDir=1;
   function childrenView(){
-    const cs=children();
+    const cs=childSummary();
     return `<div class="sect"><h3>${st.level==='assembly'?'Mandalas':'Wards'} <span style="color:var(--ink-3);font-weight:600">(${cs.length})</span>${_childView==='cards'?`<span class="taphint"><span class="fingr">👆</span> tap a card to open</span>`:''}</h3>
       <div class="seg childview" role="group" aria-label="View"><button data-v="cards" class="${_childView==='cards'?'on':''}">▦ Cards</button><button data-v="list" class="${_childView==='list'?'on':''}">☰ List</button></div></div>
       <div id="childwrap"></div>`;
   }
   function drawChildren(){
-    const host=$('#childwrap'); if(!host)return; const cs=children();
+    const host=$('#childwrap'); if(!host)return; const cs=childSummary();
     if(_childView==='list'){ host.innerHTML=childListHTML(cs); wireChildList(); }
     else { host.innerHTML=cardGrid(cs); wireCards(); }
   }
   function childListHTML(cs){
     const nameLabel=st.level==='assembly'?'Mandala':'Ward';
-    const rows=cs.map(c=>{const a=agg(c.rows);return {key:c.key,type:c.type,name:c.name,
+    const rows=cs.map(c=>{const a=c.a;return {key:c.key,type:c.type,name:c.name,
       totalVoters:a.totalVoters,sirSubmitted:a.sirSubmitted,delTotal:a.delTotal,digitized:a.digitized,coverage:a.coverage};});
     rows.sort((p,q)=>{const A=p[_clKey],B=q[_clKey];return((A>B)-(A<B))*_clDir;});
     const cols=[['name',nameLabel,0],['totalVoters','Total',1],['sirSubmitted','Submitted',1],['delTotal','To Delete',1],['digitized','SIR Sub %',1],['coverage','MP %',1]];
@@ -490,7 +537,7 @@
     document.querySelectorAll('.childview').forEach(()=>{}); const th=$('.sect .taphint'); if(th)th.style.display=_childView==='cards'?'':'none';}));}
 
   function cardGrid(cs){return `<div class="cards">`+cs.map((c,idx)=>{
-    const a=agg(c.rows),cb=covBand(a.coverage),db=digBand(a.digitized);
+    const a=c.a,cb=covBand(a.coverage),db=digBand(a.digitized);
     const cta=c.type==='mandala'?'Tap to view wards':'Tap to view booths';
     return `<button class="ccard" data-key="${esc(c.key)}" data-type="${c.type}" style="animation-delay:${Math.min(idx,10)*40}ms" aria-label="${esc(c.name)} — ${cta}">
       <div class="ch"><span class="nm">${esc(c.name)}</span><span class="mb">${a.count} booths <span class="chev" aria-hidden="true">›</span></span></div>
@@ -544,14 +591,23 @@
 
   // paginated "all booths in scope" list (below the cards at assembly/mandala level)
   let _blBooths=[], _blPage=0, _blKey='coverage', _blDir=1; const BL_SIZE=20;
-  function boothListSection(booths, title){
-    _blBooths=booths; _blPage=0; _blKey='coverage'; _blDir=1;   // default: sort by MP % then SIR Sub %
-    return `<div class="panel" style="margin-bottom:16px"><div class="sect" style="margin:0 0 6px"><h3>${esc(title)} <span style="color:var(--ink-3);font-weight:600">(${booths.length})</span></h3></div>
+  function boothListSection(title){
+    _blPage=0; _blKey='coverage'; _blDir=1;   // default: sort by MP % then SIR Sub %
+    return `<div class="panel" style="margin-bottom:16px"><div class="sect" style="margin:0 0 6px"><h3>${esc(title)}</h3></div>
       <div class="hint" style="margin-bottom:8px">Sorted by MP % then SIR Submitted % · 20 per page · tap a row to open the booth · tap a % header to re-sort.</div>
       <div id="bl"></div></div>`;
   }
+  function blInit(){
+    const host=$('#bl'); if(!host)return;
+    if(BOOTHS.length){blDraw();return;}
+    host.innerHTML=`<div class="loading" style="cursor:pointer">Tap or scroll here to load the full booth list…</div>`;
+    const load=()=>ensureBooths(()=>{const h=$('#bl');if(h)blDraw();});
+    if('IntersectionObserver' in window){const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)){io.disconnect();load();}});io.observe(host);}
+    host.addEventListener('click',load,{once:true});
+  }
   function blDraw(){
     const host=$('#bl'); if(!host)return;
+    _blBooths=scopeBooths();
     const rows=_blBooths.map(x=>({ward:x.ward,booth:x.booth,mandal:x.mandal,
       coverage:pct(x.sirSubmitted,x.mpVoted), digitized:pct(x.sirSubmitted,x.totalVoters)}));
     rows.sort((a,b)=>{const p=(a[_blKey]-b[_blKey])*_blDir; return p || (a.coverage-b.coverage) || (a.digitized-b.digitized);});
@@ -587,7 +643,7 @@
     document.querySelectorAll('tr[data-booth]').forEach(r=>r.addEventListener('click',()=>go({level:'booth',booth:+r.dataset.booth})));
     const pb=$('#pdfBtn'); if(pb)pb.addEventListener('click',downloadWardPDF);}
   function wireDots(items){const tip=$('#tip');document.querySelectorAll('.dot').forEach(d=>{
-    d.addEventListener('mousemove',e=>{const i=+d.dataset.i,a=agg(items[i].rows);
+    d.addEventListener('mousemove',e=>{const i=+d.dataset.i,a=items[i].a;
       tip.innerHTML=`<b>${esc(items[i].name)}</b><br>MP ${fmt(a.mpVoted)} · Sub ${fmt(a.sirSubmitted)} · Total ${fmt(a.totalVoters)}`;
       tip.style.opacity=1;tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY-10)+'px';});
     d.addEventListener('mouseleave',()=>tip.style.opacity=0);});}
@@ -604,8 +660,12 @@
     return null;
   }
   function renderBooth(){
+    if(!BOOTHS.length){$('#app').innerHTML=`<button class="back" id="boothBack" style="margin-bottom:12px">&larr; Back</button><div class="panel"><div class="loading">Loading booth…</div></div>`;
+      const bb=$('#boothBack');if(bb)bb.addEventListener('click',()=>history.back());
+      ensureBooths(()=>{if(st.level==='booth')renderBooth();});return;}
     const x=BOOTHS.find(z=>z.booth===st.booth);
     if(!x){go({level:'ward',booth:null});return;}
+    if(!st.ward){st.ward=x.ward;st.mandal=x.mandal;}   // deep-linked #/b/<n>: backfill breadcrumb
     const a=agg([x]);const cb=covBand(a.coverage),db=digBand(a.digitized);
     const prez=WARDPREZ[x.ward]?`<span>Ward President: <b>${esc(WARDPREZ[x.ward])}</b></span>`:'';
     $('#app').innerHTML=`
@@ -679,10 +739,11 @@
   async function doSearch(raw){
     const q=raw.trim();
     if(!q){if(st.level!=='booth')render();return;}     // empty -> restore current view
-    if(/^\d+$/.test(q)){const x=BOOTHS.find(b=>b.booth===+q);if(x){go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});return;}}
+    if(/^\d+$/.test(q)){go({level:'booth',mandal:null,ward:null,booth:+q});return;}
     const seq=++searchSeq, ql=q.toLowerCase();
     const wards=[],wset=new Set();
-    for(const b of BOOTHS){if(b.ward.toLowerCase().includes(ql)&&!wset.has(b.ward)){wset.add(b.ward);wards.push(b);if(wards.length>=8)break;}}
+    const wsrc = BOOTHS.length ? BOOTHS : (SUMMARY?Object.entries(SUMMARY.wards).map(([w,v])=>({ward:w,mandal:v.mandal})):[]);
+    for(const b of wsrc){if(b.ward.toLowerCase().includes(ql)&&!wset.has(b.ward)){wset.add(b.ward);wards.push(b);if(wards.length>=8)break;}}
     let voters=[],total=0;
     if(ql.length>=2){
       if(!ALLROWS && !searchLoading){searchLoading=true;renderSearchResults(q,{wards,voters:[],total:0,loading:true});}
@@ -712,20 +773,20 @@
     document.querySelectorAll('.sr').forEach(b=>b.addEventListener('click',()=>{
       const t=b.dataset.t;
       if(t==='ward')go({level:'ward',mandal:b.dataset.mandal,ward:b.dataset.ward,booth:null});
-      else{const x=BOOTHS.find(z=>z.booth===+b.dataset.booth);if(!x)return;
-        if(t==='voter')pendingRosterQ=b.dataset.epic;
-        go({level:'booth',mandal:x.mandal,ward:x.ward,booth:x.booth});}
+      else{if(t==='voter')pendingRosterQ=b.dataset.epic;
+        go({level:'booth',mandal:null,ward:null,booth:+b.dataset.booth});}
     }));
     updateFoot();
   }
 
   async function loadData(){
-    try{const r=await fetch(DATA_BASE+'data/ac174.json',{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
-    const inline=$('#ac174-data').textContent.trim();if(inline&&inline!=='null')return JSON.parse(inline);
-    throw new Error('No data: expected ./data/ac174.json or embedded data.');}
+    const inline=$('#ac174-data').textContent.trim();
+    if(inline&&inline!=='null'){const d=JSON.parse(inline);BOOTHS=d.booths;return {meta:d.meta};}   // offline: full data embedded
+    try{const r=await fetch(DATA_BASE+'data/summary.json',{cache:'no-store'});if(r.ok){SUMMARY=await r.json();return {meta:SUMMARY.meta};}}catch(e){}
+    const r2=await fetch(DATA_BASE+'data/ac174.json',{cache:'no-store'});const d=await r2.json();BOOTHS=d.booths;return {meta:d.meta};}
 
   loadData().then(d=>{
-    DATA=d;BOOTHS=d.booths;WARDPREZ=d.meta.wardPresident||{};
+    DATA=d;WARDPREZ=d.meta.wardPresident||{};
     if(hasEmbedded())ensureAllRows();   // offline: parse embedded dataset up front so search/booths are instant
     $('#title').textContent=d.meta.title;$('#subtitle').textContent=d.meta.subtitle;$('#dateBadge').textContent=d.meta.dateBadge;document.title=d.meta.subtitle;
     $('#back').addEventListener('click',()=>history.back());
