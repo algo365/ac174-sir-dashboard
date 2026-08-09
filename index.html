@@ -331,7 +331,7 @@
   // Data lives with the page (AWS S3 website / offline). On GitHub Pages the repo is
   // just this HTML shell, so pull data from the AWS S3 bucket over HTTPS (CORS-enabled).
   const DATA_BASE = location.hostname.endsWith('github.io')
-    ? 'https://ac174-sir-dashboard-560151615764.s3.ap-south-1.amazonaws.com/'
+    ? 'https://ac174-sir-web-560151615764.s3.ap-south-1.amazonaws.com/'
     : './';
   // parse the tab-separated deleted-voter dataset once: booth,serial,epic,name,sex,age,relative,reason
   function parseTSV(text){const out=[];for(const ln of text.split('\n')){if(!ln)continue;const p=ln.split('\t');
