@@ -14,6 +14,7 @@
     --amber:#c67c05; --amber-bg:#fbedcf;
     --red:#cf2b2b; --red-bg:#fbe0e0;
     --blue:#2563a8; --purple:#7c5cbf; --teal:#0d9488;
+    --unmap:#6d3bd4; --unmap-bg:#ece3fb;
     --r-sm:8px; --r-md:12px; --r-lg:16px;
     --sh-sm:0 1px 2px rgba(18,41,77,.06);
     --sh-md:0 2px 4px rgba(18,41,77,.06),0 8px 20px rgba(18,41,77,.06);
@@ -67,15 +68,15 @@
   .kpi .l{color:#a9bce0;font-size:10.5px;margin-top:4px;text-transform:uppercase;letter-spacing:.4px}
   .kpi .v.g{color:#5ce68f}.kpi .v.a{color:#ffcd6b}.kpi .v.r{color:#ff8f8f}
 
-  .bigrow{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+  .bigrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin-bottom:16px}
   .big{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;box-shadow:var(--sh-sm)}
   .big .cap{font-size:12.5px;color:var(--ink-2);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
   .big .num{font-size:clamp(34px,7vw,52px);font-weight:800;line-height:1;margin:6px 0 4px}
-  .big .num.g{color:var(--green)}.big .num.a{color:var(--amber)}.big .num.r{color:var(--red)}
+  .big .num.g{color:var(--green)}.big .num.a{color:var(--amber)}.big .num.r{color:var(--red)}.big .num.u{color:var(--unmap)}
   .big .den{font-size:12.5px;color:var(--ink-3);margin-bottom:12px}
   .prog{height:10px;background:var(--paper2);border-radius:999px;overflow:hidden}
   .prog > i{display:block;height:100%;border-radius:999px}
-  .prog > i.g{background:var(--green)}.prog > i.a{background:var(--amber)}.prog > i.r{background:var(--red)}
+  .prog > i.g{background:var(--green)}.prog > i.a{background:var(--amber)}.prog > i.r{background:var(--red)}.prog > i.u{background:var(--unmap)}
 
   .panels{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
   .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;box-shadow:var(--sh-sm)}
@@ -93,7 +94,7 @@
   .pctbars{display:flex;flex-direction:column;gap:9px;margin-top:12px}
   .pb-l{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--ink-2);font-weight:700;margin-bottom:3px}
   .pb-l .pb-v{font-size:14px;font-weight:800}
-  .pb-v.g{color:var(--green)}.pb-v.a{color:var(--amber)}.pb-v.r{color:var(--red)}
+  .pb-v.g{color:var(--green)}.pb-v.a{color:var(--amber)}.pb-v.r{color:var(--red)}.pb-v.u{color:var(--unmap)}
   /* colourful animated "tap to open" call-to-action */
   .tapcta{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:14px;
     background:linear-gradient(120deg,var(--blue),#3b82d6);color:#fff;font-weight:800;font-size:12.5px;
@@ -141,6 +142,10 @@
   .delcell{border:1px solid var(--border);border-radius:var(--r-sm);padding:10px}
   .delcell .dv{font-size:17px;font-weight:800}.delcell .dl{font-size:11px;color:var(--ink-2);margin-top:2px}
   .delcell .dp{font-size:11px;color:var(--ink-3);font-weight:700}
+  .boothid{background:var(--unmap-bg);border:1px solid #d6c8f2;border-radius:var(--r-md);padding:10px 13px;margin:10px 0 8px}
+  .bid-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:13.5px;color:var(--ink)}
+  .bid-tag{background:var(--unmap);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .bid-school{font-size:12px;color:var(--ink-2);margin-top:5px}
 
   .sect{display:flex;justify-content:space-between;align-items:center;margin:6px 0 12px;flex-wrap:wrap;gap:8px}
   .sect h3{font-size:15px;font-weight:800}
@@ -258,6 +263,7 @@
 <div id="printarea"></div>
 <script id="ac174-data" type="application/json">null</script>
 <script id="allrows" type="text/plain">null</script>
+<script id="nomaprows" type="text/plain">null</script>
 <script>
 "use strict";
 (function(){
@@ -268,11 +274,12 @@
   const p1=n=>(n||0).toFixed(1)+'%';
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  const SUM=['totalVoters','mpVoted','sirSubmitted','delTotal','permShifted','untraceable','efRefused','death','enrolledElsewhere'];
+  const SUM=['totalVoters','mpVoted','sirSubmitted','delTotal','permShifted','untraceable','efRefused','death','enrolledElsewhere','noMapping','noMappingMobile'];
   function agg(rows){const t={};SUM.forEach(k=>t[k]=0);for(const r of rows)for(const k of SUM)t[k]+=r[k]||0;
     t.count=rows.length;
     t.coverage=pct(t.sirSubmitted,t.mpVoted); t.digitized=pct(t.sirSubmitted,t.totalVoters);
     t.deletion=pct(t.delTotal,t.totalVoters); t.turnout=pct(t.mpVoted,t.totalVoters);
+    t.unmapped=pct(t.noMapping,t.totalVoters);
     t.notSubmitted=t.totalVoters-t.sirSubmitted; t.votedGap=t.mpVoted-t.sirSubmitted; return t;}
   const covBand=c=>c>=100?'g':c>=90?'a':'r';
   const digBand=d=>d>=55?'g':d>=45?'a':'r';
@@ -290,12 +297,13 @@
       `<div class="cli"><i class="sw" style="background:${c}"></i><span class="cl-nm">${esc(nm)}</span><b class="cl-n">${fmt(t[k])}</b><span class="cl-p">${p1(pct(t[k],tot))}</span></div>`
     ).join('')+`</div>`;}
 
-  let DATA=null,BOOTHS=[],ALLROWS=null,WARDPREZ={},pendingRosterQ='',SUMMARY=null,boothsLoading=null;
+  let DATA=null,BOOTHS=[],ALLROWS=null,NOMAPROWS=null,WARDPREZ={},pendingRosterQ='',SUMMARY=null,boothsLoading=null;
   // Incremental load: the landing uses a tiny summary.json (per-mandala/ward aggregates);
   // the full 527-booth detail is fetched lazily only when a booth list/table/page is opened.
   function totalsToAgg(t){t=t||{};const o={};SUM.forEach(k=>o[k]=t[k]||0);o.count=t.count||0;
     o.coverage=pct(o.sirSubmitted,o.mpVoted);o.digitized=pct(o.sirSubmitted,o.totalVoters);
     o.deletion=pct(o.delTotal,o.totalVoters);o.turnout=pct(o.mpVoted,o.totalVoters);
+    o.unmapped=pct(o.noMapping,o.totalVoters);
     o.notSubmitted=o.totalVoters-o.sirSubmitted;o.votedGap=o.mpVoted-o.sirSubmitted;return o;}
   function scopeAgg(){
     if(BOOTHS.length)return agg(scopeBooths());
@@ -344,6 +352,25 @@
     if(emb&&emb.trim()&&emb.trim()!=='null'){ALLROWS=parseTSV(emb.trim());return ALLROWS;}
     const r=await fetch(DATA_BASE+'data/search.tsv',{cache:'no-store'});ALLROWS=parseTSV(await r.text());return ALLROWS;}
   const hasEmbedded=()=>{const e=$('#allrows').textContent;return e&&e.trim()&&e.trim()!=='null';};
+  // no-mapping dataset (offline embed): booth,serial,epic,name,sex,age,relative,in2025,beforeBooth,mob
+  function parseNomapTSV(text){const out=[];for(const ln of text.split('\n')){if(!ln)continue;const p=ln.split('\t');
+    out.push({booth:+p[0],row:[p[1],p[2],p[3],p[4],p[5],p[6],p[7],p[8],+p[9]||0]});}
+    return out;}
+  const hasEmbeddedNomap=()=>{const e=$('#nomaprows')&&$('#nomaprows').textContent;return e&&e.trim()&&e.trim()!=='null';};
+  async function ensureNomapRows(){
+    if(NOMAPROWS)return NOMAPROWS;
+    if(hasEmbeddedNomap()){NOMAPROWS=parseNomapTSV($('#nomaprows').textContent.trim());return NOMAPROWS;}
+    const r=await fetch(DATA_BASE+'data/nomap.tsv',{cache:'no-store'});NOMAPROWS=parseNomapTSV(await r.text());return NOMAPROWS;}
+  async function loadNomap(n){
+    try{const r=await fetch(`${DATA_BASE}data/nomap/${n}.json`,{cache:'no-store'});if(r.ok)return await r.json();}catch(e){}
+    if(hasEmbeddedNomap()){                               // offline: derive from embedded dataset
+      const all=await ensureNomapRows();
+      const rows=all.filter(r=>r.booth===n).map(r=>r.row);
+      if(rows.length){const cats={};rows.forEach(x=>{const c=x[6]==='Y'?'In 2025 roll':'New (not in 2025)';cats[c]=(cats[c]||0)+1;});
+        return {booth:n,total:rows.length,withMobile:rows.reduce((s,x)=>s+(x[8]||0),0),cats,rows,asOf:(DATA.meta.noMappingDate||'2026-08-22')};}
+    }
+    return null;
+  }
   const st={level:'assembly',mandal:null,ward:null,booth:null,filter:'All',sortKey:'booth',sortDir:1};
   // history-backed navigation so the browser / phone Back button walks the levels
   // shareable URLs: state <-> location.hash  (#/, #/m/<mandal>, #/w/<ward>, #/b/<booth>)
@@ -436,8 +463,8 @@
     const strip=`<div class="kpis">
       ${kpi(fmt(t.totalVoters),'Total Voters')}${kpi(fmt(t.mpVoted),'MP Voted 2024')}
       ${kpi(fmt(t.sirSubmitted),'SIR Submitted')}${kpi(fmt(t.delTotal),'To Delete')}
-      ${kpi(fmt(t.notSubmitted),'Not Yet Submitted')}${kpi(p1(t.coverage),'MP %',covBand(t.coverage))}
-      ${kpi(p1(t.digitized),'SIR Sub %',digBand(t.digitized))}</div>`;
+      ${kpi(fmt(t.notSubmitted),'Not Yet Submitted')}${kpi(fmt(t.noMapping),'No-Mapping')}
+      ${kpi(p1(t.coverage),'MP %',covBand(t.coverage))}${kpi(p1(t.digitized),'SIR Sub %',digBand(t.digitized))}</div>`;
 
     const cb=covBand(t.coverage),db=digBand(t.digitized);
     const big=`<div class="bigrow">
@@ -448,7 +475,11 @@
       <div class="big"><div class="cap">SIR Submitted % · SIR Submitted / Total Voters</div>
         <div class="num ${db}">${p1(t.digitized)}</div>
         <div class="den">${fmt(t.sirSubmitted)} submitted of ${fmt(t.totalVoters)} total voters</div>
-        <div class="prog"><i class="${db}" style="width:${Math.min(100,t.digitized)}%"></i></div></div></div>`;
+        <div class="prog"><i class="${db}" style="width:${Math.min(100,t.digitized)}%"></i></div></div>
+      <div class="big"><div class="cap">Unmapped % · No-mapping voters / Total Voters</div>
+        <div class="num u">${p1(t.unmapped)}</div>
+        <div class="den">${fmt(t.noMapping)} no-mapping voters (2026 draft) · ${fmt(t.noMappingMobile)} with mobile</div>
+        <div class="prog"><i class="u" style="width:${Math.min(100,t.unmapped)}%"></i></div></div></div>`;
 
     let panels, chItems=[];
     if(wardNeedsBooths){
@@ -494,7 +525,8 @@
     if(wardNeedsBooths) ensureBooths(()=>{ if(st.level==='ward') render(); });
   }
   function updateFoot(){
-    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br>Individual deletion records (${fmt(DATA.meta.deletedCount||318662)} voters — name, relative, EPIC, serial, age, sex) are from the deletion list dated ${esc(DATA.meta.rosterDate||'2026-08-03')}; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
+    const nmDate=esc(DATA.meta.noMappingDate||'2026-08-22'), renum=DATA.meta.renumberedCount, newB=DATA.meta.newBoothCount;
+    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br><b>No-Mapping</b> = voters in the 2026 SIR first draft (dated ${nmDate}) whose booth could not be mapped. <b>2025 → 2026:</b> booth numbers were renumbered in the 2026 draft (${renum} of ${DATA.meta.boothCount} changed number, ${newB} new) — same schools, new numbers; each booth page and the ward table show its 2025 number.<br>Individual deletion records (${fmt(DATA.meta.deletedCount||318662)} voters — name, relative, EPIC, serial, age, sex) are from the deletion list dated ${esc(DATA.meta.rosterDate||'2026-08-03')}; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
   }
 
   // Cards / List toggle for the child grid (mandalas at assembly, wards at mandala)
@@ -551,37 +583,39 @@
         <div class="pctbars">
           <div class="pb"><div class="pb-l"><span>MP Voted % <span style="color:var(--ink-3)">(vs ${fmt(a.mpVoted)})</span></span><span class="pb-v ${cb}">${p1(a.coverage)}</span></div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
           <div class="pb"><div class="pb-l"><span>SIR Submitted %</span><span class="pb-v ${db}">${p1(a.digitized)}</span></div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div>
+          <div class="pb"><div class="pb-l"><span>Unmapped % <span style="color:var(--ink-3)">(${fmt(a.noMapping)} no-mapping)</span></span><span class="pb-v u">${p1(a.unmapped)}</span></div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div>
         </div>
         <div class="tapcta"><span>${cta}</span><span class="arw">&rarr;</span></div>
       </div></button>`;}).join('')+`</div>`;}
 
-  const COLS=[['booth','Booth',0],['blo','BLO',0],['totalVoters','Total Voters',1],
+  const COLS=[['booth','Booth',0],['booth2025','2025 #',0],['blo','BLO',0],['totalVoters','Total Voters',1],
     ['digitized','SIR Sub %',1],['coverage','MP %',1],
-    ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1]];
-  function rowVals(x){const a=agg([x]);return {booth:x.booth,blo:x.blo||'—',
-    totalVoters:x.totalVoters,mpVoted:x.mpVoted,sirSubmitted:x.sirSubmitted,delTotal:x.delTotal,coverage:a.coverage,digitized:a.digitized};}
+    ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1],['noMapping','No-Map',1]];
+  function rowVals(x){const a=agg([x]);return {booth:x.booth,booth2025:x.booth2025,blo:x.blo||'—',
+    totalVoters:x.totalVoters,mpVoted:x.mpVoted,sirSubmitted:x.sirSubmitted,delTotal:x.delTotal,noMapping:x.noMapping,coverage:a.coverage,digitized:a.digitized};}
   function boothTable(b){
     let rows=b.map(rowVals);
     rows.sort((p,q)=>{const A=p[st.sortKey],B=q[st.sortKey];return((A>B)-(A<B))*st.sortDir;});
     const head=COLS.map(([k,l,r])=>`<th class="${r?'r':''}" data-k="${k}">${l}${st.sortKey===k?`<span class="ar">${st.sortDir>0?'▲':'▼'}</span>`:''}</th>`).join('');
     const body=rows.map(v=>{const cb=covBand(v.coverage),db=digBand(v.digitized);
-      return `<tr data-booth="${v.booth}"><td class="strong">#${v.booth}</td><td class="dim">${esc(v.blo)}</td>
+      const o25=v.booth2025==null?`<span style="color:var(--unmap);font-weight:700">new</span>`:`#${v.booth2025}`;
+      return `<tr data-booth="${v.booth}"><td class="strong">#${v.booth}</td><td class="dim">${o25}</td><td class="dim">${esc(v.blo)}</td>
         <td class="r">${fmt(v.totalVoters)}</td>
         <td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td><td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td>
-        <td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td></tr>`;}).join('');
+        <td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td><td class="r">${fmt(v.noMapping)}</td></tr>`;}).join('');
     return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3>
         <button class="back" id="pdfBtn">⬇ Download PDF</button></div>
       <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;}
   function downloadWardPDF(){
     const wb=BOOTHS.filter(z=>z.ward===st.ward).slice().sort((a,z)=>a.booth-z.booth);
     const t=agg(wb);
-    const body=wb.map(x=>{const a=agg([x]);return `<tr><td>#${x.booth}</td><td>${esc(x.blo||'—')}</td><td class="n">${fmt(x.totalVoters)}</td><td class="n">${p1(a.digitized)}</td><td class="n">${p1(a.coverage)}</td><td class="n">${fmt(x.mpVoted)}</td><td class="n">${fmt(x.sirSubmitted)}</td><td class="n">${fmt(x.delTotal)}</td></tr>`;}).join('');
+    const body=wb.map(x=>{const a=agg([x]);const o25=x.booth2025==null?'new':'#'+x.booth2025;return `<tr><td>#${x.booth}</td><td>${o25}</td><td>${esc(x.blo||'—')}</td><td class="n">${fmt(x.totalVoters)}</td><td class="n">${p1(a.digitized)}</td><td class="n">${p1(a.coverage)}</td><td class="n">${fmt(x.mpVoted)}</td><td class="n">${fmt(x.sirSubmitted)}</td><td class="n">${fmt(x.delTotal)}</td><td class="n">${fmt(x.noMapping)}</td></tr>`;}).join('');
     $('#printarea').innerHTML=`<div class="prpt">
       <h1>AC-174 Mahadevapura — ${esc(st.ward)} Ward</h1>
-      <div class="prsub">Booth-wise SIR digitization status · ${esc(st.mandal)} Mandala · ${wb.length} booths · aggregate as on ${esc(DATA.meta.aggAsOf||'2026-08-06')}</div>
-      <table class="prt"><thead><tr><th>Booth</th><th>BLO</th><th class="n">Total</th><th class="n">SIR Sub %</th><th class="n">MP %</th><th class="n">MP Voted</th><th class="n">SIR Submitted</th><th class="n">SIR Delete</th></tr></thead>
-      <tbody><tr class="tot"><td colspan="2">WARD TOTAL</td><td class="n">${fmt(t.totalVoters)}</td><td class="n">${p1(t.digitized)}</td><td class="n">${p1(t.coverage)}</td><td class="n">${fmt(t.mpVoted)}</td><td class="n">${fmt(t.sirSubmitted)}</td><td class="n">${fmt(t.delTotal)}</td></tr>${body}</tbody></table>
-      <div class="prfoot">MP Voted = 2024 Lok Sabha votes polled · MP % (coverage) = SIR Submitted ÷ MP Voted · SIR Sub % = SIR Submitted ÷ Total Voters · SIR Submitted = EFs digitized. Generated from the AC-174 SIR dashboard.</div></div>`;
+      <div class="prsub">Booth-wise SIR digitization status · ${esc(st.mandal)} Mandala · ${wb.length} booths · aggregate as on ${esc(DATA.meta.aggAsOf||'2026-08-06')} · 2025 # = booth number in the 2025 roll · No-Map = 2026-draft no-mapping voters</div>
+      <table class="prt"><thead><tr><th>Booth</th><th>2025 #</th><th>BLO</th><th class="n">Total</th><th class="n">SIR Sub %</th><th class="n">MP %</th><th class="n">MP Voted</th><th class="n">SIR Submitted</th><th class="n">SIR Delete</th><th class="n">No-Map</th></tr></thead>
+      <tbody><tr class="tot"><td colspan="3">WARD TOTAL</td><td class="n">${fmt(t.totalVoters)}</td><td class="n">${p1(t.digitized)}</td><td class="n">${p1(t.coverage)}</td><td class="n">${fmt(t.mpVoted)}</td><td class="n">${fmt(t.sirSubmitted)}</td><td class="n">${fmt(t.delTotal)}</td><td class="n">${fmt(t.noMapping)}</td></tr>${body}</tbody></table>
+      <div class="prfoot">MP Voted = 2024 Lok Sabha votes polled · MP % (coverage) = SIR Submitted ÷ MP Voted · SIR Sub % = SIR Submitted ÷ Total Voters · SIR Submitted = EFs digitized · No-Map = no-mapping voters in the 2026 SIR first draft. Generated from the AC-174 SIR dashboard.</div></div>`;
     const oldTitle=document.title; document.title=`AC174_${st.ward}_booths`.replace(/\s+/g,'_');
     document.body.classList.add('printmode');
     const done=()=>{document.body.classList.remove('printmode');document.title=oldTitle;window.removeEventListener('afterprint',done);};
@@ -668,26 +702,38 @@
     if(!st.ward){st.ward=x.ward;st.mandal=x.mandal;}   // deep-linked #/b/<n>: backfill breadcrumb
     const a=agg([x]);const cb=covBand(a.coverage),db=digBand(a.digitized);
     const prez=WARDPREZ[x.ward]?`<span>Ward President: <b>${esc(WARDPREZ[x.ward])}</b></span>`:'';
+    const o25=x.booth2025;
+    const numLine = o25==null ? `<b>New booth</b> — added in the 2026 SIR draft (not in the 2025 roll)`
+      : o25===x.booth ? `Same number in 2025 &amp; 2026`
+      : `Now <b>Booth ${x.booth}</b> in 2026 draft · was <b>Booth ${o25}</b> in 2025 roll`;
+    const bid=`<div class="boothid"><div class="bid-row"><span class="bid-tag">2025 → 2026</span><span>${numLine}</span></div>${x.school?`<div class="bid-school">📍 ${esc(x.school)}</div>`:''}</div>`;
     $('#app').innerHTML=`
       <button class="back" id="boothBack" style="margin-bottom:12px">&larr; Back to ${esc(x.ward)} ward</button>
       <h2 class="scope">Booth ${x.booth}</h2>
       <div class="scope-meta">${esc(x.mandal)} Mandala · ${esc(x.ward)} ward</div>
+      ${bid}
       <div class="who"><span>BLO: <b>${esc(x.blo||'—')}</b>${x.bloMob?` (${esc(x.bloMob)})`:''}</span>${prez}</div>
       <div class="bigrow" style="margin-bottom:12px">
         <div class="big"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:clamp(30px,6vw,44px)">${p1(a.coverage)}</div><div class="den">${fmt(x.sirSubmitted)} submitted vs ${fmt(x.mpVoted)} MP-2024 voters</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
-        <div class="big"><div class="cap">SIR Submitted %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div></div>
+        <div class="big"><div class="cap">SIR Submitted %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div>
+        <div class="big"><div class="cap">Unmapped %</div><div class="num u" style="font-size:clamp(30px,6vw,44px)">${p1(a.unmapped)}</div><div class="den">${fmt(x.noMapping)} no-mapping voters · ${fmt(x.noMappingMobile)} with mobile</div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div></div>
       <div class="delgrid">
         <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
         <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
         <div class="delcell"><div class="dv">${fmt(x.sirSubmitted)}</div><div class="dl">SIR Submitted</div></div>
-        <div class="delcell"><div class="dv">${fmt(x.delTotal)}</div><div class="dl">To Delete</div><div class="dp">${p1(a.deletion)}</div></div></div>
+        <div class="delcell"><div class="dv">${fmt(x.delTotal)}</div><div class="dl">To Delete</div><div class="dp">${p1(a.deletion)}</div></div>
+        <div class="delcell"><div class="dv">${fmt(x.noMapping)}</div><div class="dl">No-Mapping</div><div class="dp">${p1(a.unmapped)}</div></div></div>
       ${compBar(a)}${compLegend(a)}
-      <h3 style="font-size:15px;margin:18px 0 2px">Deleted / to-be-deleted voters</h3>
+      <h3 style="font-size:15px;margin:18px 0 2px">🗑 Deleted / to-be-deleted voters <span style="color:var(--red);font-weight:800">(ASDDO)</span></h3>
       <div class="hint" id="rosterNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">list dated ${esc(DATA.meta.rosterDate||'2026-08-03')} · filter by reason or search name / relative / EPIC</div>
-      <div id="rosterHost"><div class="loading">Loading deletion list…</div></div>`;
+      <div id="rosterHost"><div class="loading">Loading deletion list…</div></div>
+      <h3 style="font-size:15px;margin:22px 0 2px">🧭 No-mapping voters <span style="color:var(--unmap);font-weight:800">(2026 SIR draft)</span></h3>
+      <div class="hint" id="nomapNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">draft dated ${esc(DATA.meta.noMappingDate||'2026-08-22')} · voters whose booth could not be mapped · filter or search name / relative / EPIC</div>
+      <div id="nomapHost"><div class="loading">Loading no-mapping list…</div></div>`;
     $('#boothBack').addEventListener('click',()=>history.back());
     updateFoot();
     hydrateBooth(x);
+    hydrateNomap(x);
   }
   async function hydrateBooth(x){
     const data=await loadRoster(x.booth);
@@ -726,6 +772,43 @@
       cur=c;[...host.querySelectorAll('.chip')].forEach(ch=>ch.classList.toggle('on',ch.dataset.c===c));draw();});
     const rq=host.querySelector('#rq');if(q)rq.value=q;
     let tmr;rq.addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>{q=v;draw();},200);});
+    draw();
+  }
+  async function hydrateNomap(x){
+    const data=await loadNomap(x.booth);
+    if(st.level!=='booth'||st.booth!==x.booth)return;      // navigated away while loading
+    const host=$('#nomapHost');if(!host)return;
+    if(!data||!data.rows||!data.rows.length){
+      host.innerHTML=`<div class="note">No no-mapping voters recorded for this booth in the 2026 SIR draft.</div>`;return;}
+    const note=$('#nomapNote');
+    if(note)note.innerHTML=`<b>${fmt(data.total)}</b> no-mapping voters · <b>${fmt(data.withMobile)}</b> reachable by phone (outreach pool) · draft dated <b>${esc(data.asOf||DATA.meta.noMappingDate)}</b> · filter or search name / relative / EPIC`;
+    renderNomap(host,data.rows);
+  }
+  // rows are arrays: [serial, epic, name, sex, age, relative, in2025(Y/N), beforeBooth, mob(0/1)]
+  function renderNomap(host,rows){
+    const catOf=r=>r[6]==='Y'?'In 2025 roll':'New (not in 2025)';
+    const cats=['All'];const counts={All:rows.length};
+    for(const r of rows){const c=catOf(r);if(!(c in counts)){counts[c]=0;cats.push(c);}counts[c]++;}
+    let cur='All',q='';
+    host.innerHTML=`<div class="chips" id="nmchips">${cats.map(c=>`<button class="chip ${c==='All'?'on':''}" data-c="${esc(c)}">${esc(c)} (${fmt(counts[c])})</button>`).join('')}</div>
+      <input class="search" id="nmq" placeholder="Search name / relative / EPIC…" style="width:100%;margin-bottom:8px" aria-label="Search no-mapping list">
+      <div class="rostwrap"><table><thead><tr><th title="serial in the 2026 draft">Sl. No</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Sex</th><th title="was this voter in the 2025 roll?">In 2025 Roll</th><th title="booth number in the 2025 roll">2025 Booth</th><th title="reachable by phone (number kept private)">📱</th></tr></thead><tbody id="nmbody"></tbody></table></div>
+      <div class="scope-meta" id="nmcount" style="margin-top:8px"></div>`;
+    const body=host.querySelector('#nmbody'),ncount=host.querySelector('#nmcount');
+    const draw=()=>{
+      const qq=q.trim().toLowerCase();
+      const f=rows.filter(r=>(cur==='All'||catOf(r)===cur)&&(!qq||(r[2]||'').toLowerCase().includes(qq)||(r[5]||'').toLowerCase().includes(qq)||(r[1]||'').toLowerCase().includes(qq)));
+      body.innerHTML=f.slice(0,2000).map(r=>`<tr><td class="dim">${esc(r[0])}</td><td class="strong">${esc(r[2])}</td><td class="dim">${esc(r[1])}</td>
+        <td class="dim">${esc(r[5])}</td><td class="r">${r[4]||'—'}</td><td class="dim">${esc(r[3]||'—')}</td>
+        <td>${r[6]==='Y'?'<span class="pill enrol">Yes</span>':'<span class="pill untr">New</span>'}</td>
+        <td class="dim">${r[7]?'#'+esc(r[7]):'—'}</td><td>${r[8]?'📱':''}</td></tr>`).join('')
+        ||`<tr><td colspan="9" class="dim" style="text-align:center;padding:20px">No matching voters.</td></tr>`;
+      ncount.textContent=`${fmt(f.length)} of ${fmt(rows.length)} shown`+(f.length>2000?' (first 2000 — refine to narrow)':'');
+    };
+    host.querySelector('#nmchips').addEventListener('click',e=>{const c=e.target.dataset.c;if(!c)return;
+      cur=c;[...host.querySelectorAll('#nmchips .chip')].forEach(ch=>ch.classList.toggle('on',ch.dataset.c===c));draw();});
+    const nq=host.querySelector('#nmq');
+    let tmr;nq.addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>{q=v;draw();},200);});
     draw();
   }
 
