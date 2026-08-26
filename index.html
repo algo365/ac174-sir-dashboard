@@ -418,7 +418,8 @@
     return [];}
 
   const BAR_SERIES=[['totalVoters','Total Voters','var(--ink-3)'],['mpVoted','MP Voted 2024','var(--navy)'],
-    ['sirSubmitted','SIR Submitted','var(--green)'],['delTotal','SIR Delete','var(--red)']];
+    ['sirSubmitted','SIR Submitted','var(--green)'],['delTotal','SIR Delete','var(--red)'],
+    ['noMapping','No-Mapping','var(--unmap)']];
   function groupedBar(items){
     const n=items.length, S=BAR_SERIES.length;
     const barW=9, inGap=2, groupPad=16, pl=52, pr=12, pt=12, pb=54, H=270;
@@ -432,15 +433,16 @@
     const groups=items.map((it,gi)=>{
       const gx=pl+groupPad/2+gi*(groupW+groupPad);
       const cx=gx+groupW/2, dig=it.a.digitized||0, digc=digBand(dig)==='g'?'#158a4a':digBand(dig)==='a'?'#c67c05':'#cf2b2b';
+      const unm=it.a.unmapped||0;
       const bars=BAR_SERIES.map(([k,label,c],si)=>{const v=it.a[k]||0,bx=gx+si*(barW+inGap),by=y(v),bh=H-pb-by;
         return `<rect x="${bx}" y="${by}" width="${barW}" height="${Math.max(0,bh)}" fill="${c}" rx="1.5"/>`;}).join('');
       const lbl=esc(String(it.name).length>9?String(it.name).slice(0,8)+'…':it.name);
-      const digLbl=`<text x="${cx}" y="${pt+8}" text-anchor="middle" font-size="10" font-weight="700" fill="${digc}">${dig.toFixed(0)}%</text>`;
-      const tip=`${esc(it.name)} — Total ${fmt(it.a.totalVoters)}, MP Voted ${fmt(it.a.mpVoted)}, SIR Submitted ${fmt(it.a.sirSubmitted)}, SIR Delete ${fmt(it.a.delTotal)} · Digitized ${dig.toFixed(1)}% · tap to open`;
+      const digLbl=`<text x="${cx}" y="${pt+8}" text-anchor="middle" font-size="10" font-weight="700"><tspan fill="${digc}">${dig.toFixed(0)}%</tspan><tspan fill="#c3ccd9"> · </tspan><tspan fill="#6d3bd4">${unm.toFixed(0)}%</tspan></text>`;
+      const tip=`${esc(it.name)} — Total ${fmt(it.a.totalVoters)}, MP Voted ${fmt(it.a.mpVoted)}, SIR Submitted ${fmt(it.a.sirSubmitted)}, SIR Delete ${fmt(it.a.delTotal)}, No-Mapping ${fmt(it.a.noMapping)} · Digitized ${dig.toFixed(1)}% · Unmapped ${unm.toFixed(1)}% · tap to open`;
       const click=`<rect class="grpclick" data-idx="${gi}" x="${gx-groupPad/2}" y="${pt}" width="${groupW+groupPad}" height="${H-pb-pt}" fill="transparent"><title>${tip}</title></rect>`;
       return `${bars}${digLbl}<text x="${cx}" y="${H-pb+14}" text-anchor="end" font-size="9" fill="#54607a" transform="rotate(-35 ${cx} ${H-pb+14})">${lbl}</text>${click}`;
     }).join('');
-    const legend=`<div class="legend" style="margin-top:8px">`+BAR_SERIES.map(([k,l,c])=>`<span><i class="sw" style="background:${c}"></i>${l}</span>`).join('')+`<span style="color:var(--ink-3)">▪ number above each = Digitized %</span></div>`;
+    const legend=`<div class="legend" style="margin-top:8px">`+BAR_SERIES.map(([k,l,c])=>`<span><i class="sw" style="background:${c}"></i>${l}</span>`).join('')+`<span style="color:var(--ink-3)">▪ above each group: <b style="color:var(--green)">Digitized %</b> · <b style="color:var(--unmap)">Unmapped %</b></span></div>`;
     return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%;min-width:${Math.min(W,720)}px;height:auto;display:block">${grid}${groups}</svg></div>${legend}`;
   }
   let _barTargets=[];
@@ -500,8 +502,8 @@
         :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ SIR Submitted covers all ${fmt(t.mpVoted)} MP-2024 voters${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
       const subC=`<div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} total voters not yet submitted</div>`;
       panels=`<div class="panel" style="margin-bottom:16px">
-        <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete</h3>
-        <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · % above each group = Digitized %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
+        <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete · No-Mapping</h3>
+        <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · above each group: Digitized % · Unmapped %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
         ${groupedBar(barItems)}
         <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">${gapC}${subC}</div></div>`;
     }
