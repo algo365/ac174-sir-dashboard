@@ -721,7 +721,7 @@
       <div class="bigrow" style="margin-bottom:12px">
         <div class="big"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:clamp(30px,6vw,44px)">${p1(a.coverage)}</div><div class="den">${fmt(x.sirSubmitted)} submitted vs ${fmt(x.mpVoted)} MP-2024 voters</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
         <div class="big"><div class="cap">SIR Submitted %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div>
-        <div class="big"><div class="cap">Unmapped %</div><div class="num u" style="font-size:clamp(30px,6vw,44px)">${p1(a.unmapped)}</div><div class="den">${fmt(x.noMapping)} no-mapping voters · ${fmt(x.noMappingMobile)} with mobile</div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div></div>
+        <div class="big"><div class="cap">Unmapped %</div><div class="num u" style="font-size:clamp(30px,6vw,44px)">${p1(a.unmapped)}</div><div class="den">${fmt(x.noMapping)} no-mapping of ${fmt(x.sirSubmitted)} submitted</div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div></div>
       <div class="delgrid">
         <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
         <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
@@ -786,7 +786,7 @@
     if(!data||!data.rows||!data.rows.length){
       host.innerHTML=`<div class="note">No no-mapping voters recorded for this booth in the 2026 SIR draft.</div>`;return;}
     const note=$('#nomapNote');
-    if(note)note.innerHTML=`<b>${fmt(data.total)}</b> no-mapping voters · <b>${fmt(data.withMobile)}</b> reachable by phone (outreach pool) · draft dated <b>${esc(data.asOf||DATA.meta.noMappingDate)}</b> · filter or search name / relative / EPIC`;
+    if(note)note.innerHTML=`<b>${fmt(data.total)}</b> no-mapping voters · draft dated <b>${esc(data.asOf||DATA.meta.noMappingDate)}</b> · filter or search name / relative / EPIC`;
     renderNomap(host,data.rows);
   }
   // rows are arrays: [serial, epic, name, sex, age, relative, in2025(Y/N), beforeBooth, mob(0/1)]
@@ -797,7 +797,7 @@
     let cur='All',q='';
     host.innerHTML=`<div class="chips" id="nmchips">${cats.map(c=>`<button class="chip ${c==='All'?'on':''}" data-c="${esc(c)}">${esc(c)} (${fmt(counts[c])})</button>`).join('')}</div>
       <input class="search" id="nmq" placeholder="Search name / relative / EPIC…" style="width:100%;margin-bottom:8px" aria-label="Search no-mapping list">
-      <div class="rostwrap"><table><thead><tr><th title="serial in the 2026 draft">Sl. No</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Sex</th><th title="was this voter in the 2025 roll?">In 2025 Roll</th><th title="booth number in the 2025 roll">2025 Booth</th><th title="reachable by phone (number kept private)">📱</th></tr></thead><tbody id="nmbody"></tbody></table></div>
+      <div class="rostwrap"><table><thead><tr><th title="serial in the 2026 draft">Sl. No</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Sex</th><th title="was this voter in the 2025 roll?">In 2025 Roll</th><th title="booth number in the 2025 roll">2025 Booth</th></tr></thead><tbody id="nmbody"></tbody></table></div>
       <div class="scope-meta" id="nmcount" style="margin-top:8px"></div>`;
     const body=host.querySelector('#nmbody'),ncount=host.querySelector('#nmcount');
     const draw=()=>{
@@ -806,8 +806,8 @@
       body.innerHTML=f.slice(0,2000).map(r=>`<tr><td class="dim">${esc(r[0])}</td><td class="strong">${esc(r[2])}</td><td class="dim">${esc(r[1])}</td>
         <td class="dim">${esc(r[5])}</td><td class="r">${r[4]||'—'}</td><td class="dim">${esc(r[3]||'—')}</td>
         <td>${r[6]==='Y'?'<span class="pill enrol">Yes</span>':'<span class="pill untr">New</span>'}</td>
-        <td class="dim">${r[7]?'#'+esc(r[7]):'—'}</td><td>${r[8]?'📱':''}</td></tr>`).join('')
-        ||`<tr><td colspan="9" class="dim" style="text-align:center;padding:20px">No matching voters.</td></tr>`;
+        <td class="dim">${r[7]?'#'+esc(r[7]):'—'}</td></tr>`).join('')
+        ||`<tr><td colspan="8" class="dim" style="text-align:center;padding:20px">No matching voters.</td></tr>`;
       ncount.textContent=`${fmt(f.length)} of ${fmt(rows.length)} shown`+(f.length>2000?' (first 2000 — refine to narrow)':'');
     };
     host.querySelector('#nmchips').addEventListener('click',e=>{const c=e.target.dataset.c;if(!c)return;
