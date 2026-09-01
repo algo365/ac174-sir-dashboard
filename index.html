@@ -342,17 +342,17 @@
   const DATA_BASE = location.hostname.endsWith('github.io')
     ? 'https://ac174-sir-web-560151615764.s3.ap-south-1.amazonaws.com/'
     : './';
-  // parse the tab-separated deleted-voter dataset once: booth,serial,epic,name,sex,age,relative,reason
+  // global search runs over the flagged-for-notice dataset: booth,serial,epic,name,sex,age,relative,in2025,beforeBooth,mob
   function parseTSV(text){const out=[];for(const ln of text.split('\n')){if(!ln)continue;const p=ln.split('\t');
-    out.push({booth:+p[0],serial:p[1],epic:p[2],name:p[3],sex:p[4],age:p[5],relative:p[6],reason:p[7],
+    out.push({booth:+p[0],serial:p[1],epic:p[2],name:p[3],sex:p[4],age:p[5],relative:p[6],tag:(p[7]==='Y'?'In 2025 roll':'New (not in 2025)'),
       _k:(p[3]+''+p[6]).toLowerCase(),_e:(p[2]||'').toUpperCase()});}
     return out;}
   async function ensureAllRows(){
     if(ALLROWS)return ALLROWS;
-    const emb=$('#allrows').textContent;
+    const emb=$('#nomaprows')&&$('#nomaprows').textContent;
     if(emb&&emb.trim()&&emb.trim()!=='null'){ALLROWS=parseTSV(emb.trim());return ALLROWS;}
-    const r=await fetch(DATA_BASE+'data/search.tsv',{cache:'no-store'});ALLROWS=parseTSV(await r.text());return ALLROWS;}
-  const hasEmbedded=()=>{const e=$('#allrows').textContent;return e&&e.trim()&&e.trim()!=='null';};
+    const r=await fetch(DATA_BASE+'data/nomap.tsv',{cache:'no-store'});ALLROWS=parseTSV(await r.text());return ALLROWS;}
+  const hasEmbedded=()=>{const e=$('#nomaprows')&&$('#nomaprows').textContent;return e&&e.trim()&&e.trim()!=='null';};
   // no-mapping dataset (offline embed): booth,serial,epic,name,sex,age,relative,in2025,beforeBooth,mob
   function parseNomapTSV(text){const out=[];for(const ln of text.split('\n')){if(!ln)continue;const p=ln.split('\t');
     out.push({booth:+p[0],row:[p[1],p[2],p[3],p[4],p[5],p[6],p[7],p[8],+p[9]||0]});}
@@ -419,7 +419,7 @@
 
   const BAR_SERIES=[['totalVoters','Total Voters','var(--ink-3)'],['mpVoted','MP Voted 2024','var(--navy)'],
     ['sirSubmitted','SIR Submitted','var(--green)'],['delTotal','SIR Delete','var(--red)'],
-    ['noMapping','No-Mapping','var(--unmap)']];
+    ['noMapping','Flagged for Notice','var(--unmap)']];
   function groupedBar(items){
     const n=items.length, S=BAR_SERIES.length;
     const barW=9, inGap=2, groupPad=16, pl=52, pr=12, pt=12, pb=54, H=270;
@@ -438,11 +438,11 @@
         return `<rect x="${bx}" y="${by}" width="${barW}" height="${Math.max(0,bh)}" fill="${c}" rx="1.5"/>`;}).join('');
       const lbl=esc(String(it.name).length>9?String(it.name).slice(0,8)+'…':it.name);
       const digLbl=`<text x="${cx}" y="${pt+8}" text-anchor="middle" font-size="10" font-weight="700"><tspan fill="${digc}">${dig.toFixed(0)}%</tspan><tspan fill="#c3ccd9"> · </tspan><tspan fill="#6d3bd4">${unm.toFixed(0)}%</tspan></text>`;
-      const tip=`${esc(it.name)} — Total ${fmt(it.a.totalVoters)}, MP Voted ${fmt(it.a.mpVoted)}, SIR Submitted ${fmt(it.a.sirSubmitted)}, SIR Delete ${fmt(it.a.delTotal)}, No-Mapping ${fmt(it.a.noMapping)} · Digitized ${dig.toFixed(1)}% · Unmapped ${unm.toFixed(1)}% · tap to open`;
+      const tip=`${esc(it.name)} — Total ${fmt(it.a.totalVoters)}, MP Voted ${fmt(it.a.mpVoted)}, SIR Submitted ${fmt(it.a.sirSubmitted)}, SIR Delete ${fmt(it.a.delTotal)}, Flagged for Notice ${fmt(it.a.noMapping)} · Digitized ${dig.toFixed(1)}% · Flagged ${unm.toFixed(1)}% · tap to open`;
       const click=`<rect class="grpclick" data-idx="${gi}" x="${gx-groupPad/2}" y="${pt}" width="${groupW+groupPad}" height="${H-pb-pt}" fill="transparent"><title>${tip}</title></rect>`;
       return `${bars}${digLbl}<text x="${cx}" y="${H-pb+14}" text-anchor="end" font-size="9" fill="#54607a" transform="rotate(-35 ${cx} ${H-pb+14})">${lbl}</text>${click}`;
     }).join('');
-    const legend=`<div class="legend" style="margin-top:8px">`+BAR_SERIES.map(([k,l,c])=>`<span><i class="sw" style="background:${c}"></i>${l}</span>`).join('')+`<span style="color:var(--ink-3)">▪ above each group: <b style="color:var(--green)">Digitized %</b> · <b style="color:var(--unmap)">Unmapped %</b></span></div>`;
+    const legend=`<div class="legend" style="margin-top:8px">`+BAR_SERIES.map(([k,l,c])=>`<span><i class="sw" style="background:${c}"></i>${l}</span>`).join('')+`<span style="color:var(--ink-3)">▪ above each group: <b style="color:var(--green)">Digitized %</b> · <b style="color:var(--unmap)">Flagged %</b></span></div>`;
     return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="${W}" style="max-width:100%;min-width:${Math.min(W,720)}px;height:auto;display:block">${grid}${groups}</svg></div>${legend}`;
   }
   let _barTargets=[];
@@ -466,7 +466,7 @@
     const strip=`<div class="kpis">
       ${kpi(fmt(t.totalVoters),'Total Voters')}${kpi(fmt(t.mpVoted),'MP Voted 2024')}
       ${kpi(fmt(t.sirSubmitted),'SIR Submitted')}${kpi(fmt(t.delTotal),'To Delete')}
-      ${kpi(fmt(t.notSubmitted),'Not Yet Submitted')}${kpi(fmt(t.noMapping),'No-Mapping')}
+      ${kpi(fmt(t.notSubmitted),'Not Yet Submitted')}${kpi(fmt(t.noMapping),'Flagged for Notice')}
       ${kpi(p1(t.coverage),'MP %',covBand(t.coverage))}${kpi(p1(t.digitized),'SIR Sub %',digBand(t.digitized))}</div>`;
 
     const cb=covBand(t.coverage),db=digBand(t.digitized);
@@ -479,9 +479,9 @@
         <div class="num ${db}">${p1(t.digitized)}</div>
         <div class="den">${fmt(t.sirSubmitted)} submitted of ${fmt(t.totalVoters)} total voters</div>
         <div class="prog"><i class="${db}" style="width:${Math.min(100,t.digitized)}%"></i></div></div>
-      <div class="big"><div class="cap">Unmapped % · No-mapping / SIR Submitted</div>
+      <div class="big"><div class="cap">Flagged % · Flagged for Notice / SIR Submitted</div>
         <div class="num u">${p1(t.unmapped)}</div>
-        <div class="den">${fmt(t.noMapping)} no-mapping of ${fmt(t.sirSubmitted)} submitted (2026 draft) · ${fmt(t.noMappingMobile)} with mobile</div>
+        <div class="den">${fmt(t.noMapping)} flagged for notice of ${fmt(t.sirSubmitted)} submitted (2026 draft)</div>
         <div class="prog"><i class="u" style="width:${Math.min(100,t.unmapped)}%"></i></div></div></div>`;
 
     let panels, chItems=[];
@@ -502,8 +502,8 @@
         :`<div class="callout" style="background:var(--green-bg);color:var(--green);border-color:#bfe6cd">✓ SIR Submitted covers all ${fmt(t.mpVoted)} MP-2024 voters${t.votedGap<0?` (+${fmt(-t.votedGap)} beyond)`:''}</div>`;
       const subC=`<div class="callout" style="background:var(--amber-bg);color:var(--amber);border-color:#f0dca6">◱ ${fmt(t.notSubmitted)} of ${fmt(t.totalVoters)} total voters not yet submitted</div>`;
       panels=`<div class="panel" style="margin-bottom:16px">
-        <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete · No-Mapping</h3>
-        <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · above each group: Digitized % · Unmapped %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
+        <h3>Per-${one} pattern — Total Voters · MP Voted 2024 · SIR Submitted · SIR Delete · Flagged for Notice</h3>
+        <div class="hint">Counts per ${one} across ${chItems.length} ${clabel} · above each group: Digitized % · Flagged %. <b style="color:var(--blue)">Tap a ${one} to open its details.</b></div>
         ${groupedBar(barItems)}
         <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">${gapC}${subC}</div></div>`;
     }
@@ -529,7 +529,7 @@
   }
   function updateFoot(){
     const nmDate=esc(DATA.meta.noMappingDate||'2026-08-22'), renum=DATA.meta.renumberedCount, newB=DATA.meta.newBoothCount;
-    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br><b>No-Mapping</b> = voters in the 2026 SIR first draft (dated ${nmDate}) whose booth could not be mapped — a <b>subset of SIR-submitted</b> voters; <b>Unmapped % / No-Map % = No-Mapping ÷ SIR Submitted</b>. <b>2025 → 2026:</b> booth numbers were renumbered in the 2026 draft (${renum} of ${DATA.meta.boothCount} changed number, ${newB} new) — same schools, new numbers; each booth page and the ward table show its 2025 number.<br>Individual deletion records (${fmt(DATA.meta.deletedCount||318662)} voters — name, relative, EPIC, serial, age, sex) are from the deletion list dated ${esc(DATA.meta.rosterDate||'2026-08-03')}; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
+    $('#foot').innerHTML=`AC-174 Mahadevapura · ${DATA.meta.boothCount} booths · <b>MP Voted 2024</b> = Lok Sabha 2024 votes polled · Coverage = SIR Submitted ÷ MP Voted · <b>SIR Submitted = EFs digitized</b><br><b>Flagged for Notice</b> = submitted voters in the 2026 SIR first draft (dated ${nmDate}) flagged for a notice due to a booth/mapping issue — a <b>subset of SIR-submitted</b> voters; <b>Flagged % = Flagged for Notice ÷ SIR Submitted</b>. <b>2025 → 2026:</b> booth numbers were renumbered in the 2026 draft (${renum} of ${DATA.meta.boothCount} changed number, ${newB} new) — same schools, new numbers; each booth page and the ward table show its 2025 number.<br>Individual flagged-for-notice records (name, relative, EPIC, serial, age, sex) are from the 2026 SIR first draft; mobile numbers are excluded. Aggregate figures (total voters, SIR submitted, UEF categories) are as on ${esc(DATA.meta.aggAsOf||'2026-08-13')}.`;
   }
 
   // Cards / List toggle for the child grid (mandalas at assembly, wards at mandala)
@@ -550,7 +550,7 @@
     const rows=cs.map(c=>{const a=c.a;return {key:c.key,type:c.type,name:c.name,
       totalVoters:a.totalVoters,sirSubmitted:a.sirSubmitted,delTotal:a.delTotal,digitized:a.digitized,coverage:a.coverage,noMapping:a.noMapping,unmapped:a.unmapped};});
     rows.sort((p,q)=>{const A=p[_clKey],B=q[_clKey];return((A>B)-(A<B))*_clDir;});
-    const cols=[['name',nameLabel,0],['totalVoters','Total',1],['sirSubmitted','Submitted',1],['delTotal','To Delete',1],['digitized','SIR Sub %',1],['coverage','MP %',1],['noMapping','No-Map',1],['unmapped','No-Map %',1]];
+    const cols=[['name',nameLabel,0],['totalVoters','Total',1],['sirSubmitted','Submitted',1],['delTotal','To Delete',1],['digitized','SIR Sub %',1],['coverage','MP %',1],['noMapping','Flagged',1],['unmapped','Flagged %',1]];
     const head=cols.map(([k,l,r])=>`<th class="${r?'r':''} sorth" data-k="${k}">${l}${_clKey===k?`<span class="ar">${_clDir>0?'▲':'▼'}</span>`:''}</th>`).join('');
     const body=rows.map(r=>{const cb=covBand(r.coverage),db=digBand(r.digitized);
       return `<tr data-key="${esc(r.key)}" data-type="${r.type}"><td class="strong">${esc(r.name)}</td>
@@ -587,7 +587,7 @@
         <div class="pctbars">
           <div class="pb"><div class="pb-l"><span>MP Voted % <span style="color:var(--ink-3)">(vs ${fmt(a.mpVoted)})</span></span><span class="pb-v ${cb}">${p1(a.coverage)}</span></div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
           <div class="pb"><div class="pb-l"><span>SIR Submitted %</span><span class="pb-v ${db}">${p1(a.digitized)}</span></div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div>
-          <div class="pb"><div class="pb-l"><span>Unmapped % <span style="color:var(--ink-3)">(${fmt(a.noMapping)} no-mapping)</span></span><span class="pb-v u">${p1(a.unmapped)}</span></div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div>
+          <div class="pb"><div class="pb-l"><span>Flagged % <span style="color:var(--ink-3)">(${fmt(a.noMapping)} flagged)</span></span><span class="pb-v u">${p1(a.unmapped)}</span></div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div>
         </div>
         <div class="tapcta"><span>${cta}</span><span class="arw">&rarr;</span></div>
       </div></button>`;}).join('')+`</div>`;}
@@ -595,7 +595,7 @@
   const COLS=[['booth','Booth',0],['booth2025','2025 #',0],['blo','BLO',0],['totalVoters','Total Voters',1],
     ['digitized','SIR Sub %',1],['coverage','MP %',1],
     ['mpVoted','MP Voted',1],['sirSubmitted','SIR Submitted',1],['delTotal','SIR Delete',1],
-    ['noMapping','No-Map',1],['unmapped','No-Map %',1]];
+    ['noMapping','Flagged',1],['unmapped','Flagged %',1]];
   function rowVals(x){const a=agg([x]);return {booth:x.booth,booth2025:x.booth2025,blo:x.blo||'—',
     totalVoters:x.totalVoters,mpVoted:x.mpVoted,sirSubmitted:x.sirSubmitted,delTotal:x.delTotal,noMapping:x.noMapping,coverage:a.coverage,digitized:a.digitized,unmapped:a.unmapped};}
   function boothTable(b){
@@ -608,7 +608,7 @@
         <td class="r">${fmt(v.totalVoters)}</td>
         <td class="r"><span class="pill ${db}">${p1(v.digitized)}</span></td><td class="r"><span class="pill ${cb}">${p1(v.coverage)}</span></td>
         <td class="r">${fmt(v.mpVoted)}</td><td class="r">${fmt(v.sirSubmitted)}</td><td class="r">${fmt(v.delTotal)}</td><td class="r">${fmt(v.noMapping)}</td><td class="r"><span class="pill u">${p1(v.unmapped)}</span></td></tr>`;}).join('');
-    return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the deletion list</span></h3>
+    return `<div class="sect"><h3>Booths <span style="color:var(--ink-3);font-weight:600">(${rows.length})</span> <span style="font-size:11.5px;color:var(--ink-3);font-weight:600">— click a row for the flagged-for-notice list</span></h3>
         <button class="back" id="pdfBtn">⬇ Download PDF</button></div>
       <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;}
   function downloadWardPDF(){
@@ -617,10 +617,10 @@
     const body=wb.map(x=>{const a=agg([x]);const o25=x.booth2025==null?'new':'#'+x.booth2025;return `<tr><td>#${x.booth}</td><td>${o25}</td><td>${esc(x.blo||'—')}</td><td class="n">${fmt(x.totalVoters)}</td><td class="n">${p1(a.digitized)}</td><td class="n">${p1(a.coverage)}</td><td class="n">${fmt(x.mpVoted)}</td><td class="n">${fmt(x.sirSubmitted)}</td><td class="n">${fmt(x.delTotal)}</td><td class="n">${fmt(x.noMapping)}</td><td class="n">${p1(a.unmapped)}</td></tr>`;}).join('');
     $('#printarea').innerHTML=`<div class="prpt">
       <h1>AC-174 Mahadevapura — ${esc(st.ward)} Ward</h1>
-      <div class="prsub">Booth-wise SIR digitization status · ${esc(st.mandal)} Mandala · ${wb.length} booths · aggregate as on ${esc(DATA.meta.aggAsOf||'2026-08-06')} · 2025 # = booth number in the 2025 roll · No-Map = 2026-draft no-mapping voters</div>
-      <table class="prt"><thead><tr><th>Booth</th><th>2025 #</th><th>BLO</th><th class="n">Total</th><th class="n">SIR Sub %</th><th class="n">MP %</th><th class="n">MP Voted</th><th class="n">SIR Submitted</th><th class="n">SIR Delete</th><th class="n">No-Map</th><th class="n">No-Map %</th></tr></thead>
+      <div class="prsub">Booth-wise SIR digitization status · ${esc(st.mandal)} Mandala · ${wb.length} booths · aggregate as on ${esc(DATA.meta.aggAsOf||'2026-08-06')} · 2025 # = booth number in the 2025 roll · Flagged = 2026-draft flagged-for-notice voters</div>
+      <table class="prt"><thead><tr><th>Booth</th><th>2025 #</th><th>BLO</th><th class="n">Total</th><th class="n">SIR Sub %</th><th class="n">MP %</th><th class="n">MP Voted</th><th class="n">SIR Submitted</th><th class="n">SIR Delete</th><th class="n">Flagged</th><th class="n">Flagged %</th></tr></thead>
       <tbody><tr class="tot"><td colspan="3">WARD TOTAL</td><td class="n">${fmt(t.totalVoters)}</td><td class="n">${p1(t.digitized)}</td><td class="n">${p1(t.coverage)}</td><td class="n">${fmt(t.mpVoted)}</td><td class="n">${fmt(t.sirSubmitted)}</td><td class="n">${fmt(t.delTotal)}</td><td class="n">${fmt(t.noMapping)}</td><td class="n">${p1(t.unmapped)}</td></tr>${body}</tbody></table>
-      <div class="prfoot">MP Voted = 2024 Lok Sabha votes polled · MP % (coverage) = SIR Submitted ÷ MP Voted · SIR Sub % = SIR Submitted ÷ Total Voters · SIR Submitted = EFs digitized · No-Map = no-mapping voters in the 2026 SIR first draft (a subset of SIR Submitted) · No-Map % = No-Map ÷ SIR Submitted. Generated from the AC-174 SIR dashboard.</div></div>`;
+      <div class="prfoot">MP Voted = 2024 Lok Sabha votes polled · MP % (coverage) = SIR Submitted ÷ MP Voted · SIR Sub % = SIR Submitted ÷ Total Voters · SIR Submitted = EFs digitized · Flagged = flagged-for-notice voters in the 2026 SIR first draft (a subset of SIR Submitted) · Flagged % = Flagged ÷ SIR Submitted. Generated from the AC-174 SIR dashboard.</div></div>`;
     const oldTitle=document.title; document.title=`AC174_${st.ward}_booths`.replace(/\s+/g,'_');
     document.body.classList.add('printmode');
     const done=()=>{document.body.classList.remove('printmode');document.title=oldTitle;window.removeEventListener('afterprint',done);};
@@ -721,23 +721,19 @@
       <div class="bigrow" style="margin-bottom:12px">
         <div class="big"><div class="cap">MP Voted % Coverage</div><div class="num ${cb}" style="font-size:clamp(30px,6vw,44px)">${p1(a.coverage)}</div><div class="den">${fmt(x.sirSubmitted)} submitted vs ${fmt(x.mpVoted)} MP-2024 voters</div><div class="prog"><i class="${cb}" style="width:${Math.min(100,a.coverage)}%"></i></div></div>
         <div class="big"><div class="cap">SIR Submitted %</div><div class="num ${db}" style="font-size:clamp(30px,6vw,44px)">${p1(a.digitized)}</div><div class="den">${fmt(x.sirSubmitted)} submitted of ${fmt(x.totalVoters)} total</div><div class="prog"><i class="${db}" style="width:${Math.min(100,a.digitized)}%"></i></div></div>
-        <div class="big"><div class="cap">Unmapped %</div><div class="num u" style="font-size:clamp(30px,6vw,44px)">${p1(a.unmapped)}</div><div class="den">${fmt(x.noMapping)} no-mapping of ${fmt(x.sirSubmitted)} submitted</div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div></div>
+        <div class="big"><div class="cap">Flagged %</div><div class="num u" style="font-size:clamp(30px,6vw,44px)">${p1(a.unmapped)}</div><div class="den">${fmt(x.noMapping)} flagged for notice of ${fmt(x.sirSubmitted)} submitted</div><div class="prog"><i class="u" style="width:${Math.min(100,a.unmapped)}%"></i></div></div></div>
       <div class="delgrid">
         <div class="delcell"><div class="dv">${fmt(x.totalVoters)}</div><div class="dl">Total Voters</div></div>
         <div class="delcell"><div class="dv">${fmt(x.mpVoted)}</div><div class="dl">MP Voted 2024</div><div class="dp">${p1(a.turnout)} turnout</div></div>
         <div class="delcell"><div class="dv">${fmt(x.sirSubmitted)}</div><div class="dl">SIR Submitted</div></div>
         <div class="delcell"><div class="dv">${fmt(x.delTotal)}</div><div class="dl">To Delete</div><div class="dp">${p1(a.deletion)}</div></div>
-        <div class="delcell"><div class="dv">${fmt(x.noMapping)}</div><div class="dl">No-Mapping</div><div class="dp">${p1(a.unmapped)}</div></div></div>
+        <div class="delcell"><div class="dv">${fmt(x.noMapping)}</div><div class="dl">Flagged for Notice</div><div class="dp">${p1(a.unmapped)}</div></div></div>
       ${compBar(a)}${compLegend(a)}
-      <h3 style="font-size:15px;margin:18px 0 2px">🗑 Deleted / to-be-deleted voters <span style="color:var(--red);font-weight:800">(ASDDO)</span></h3>
-      <div class="hint" id="rosterNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">list dated ${esc(DATA.meta.rosterDate||'2026-08-03')} · filter by reason or search name / relative / EPIC</div>
-      <div id="rosterHost"><div class="loading">Loading deletion list…</div></div>
-      <h3 style="font-size:15px;margin:22px 0 2px">🧭 No-mapping voters <span style="color:var(--unmap);font-weight:800">(2026 SIR draft)</span></h3>
-      <div class="hint" id="nomapNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">draft dated ${esc(DATA.meta.noMappingDate||'2026-08-22')} · voters whose booth could not be mapped · filter or search name / relative / EPIC</div>
-      <div id="nomapHost"><div class="loading">Loading no-mapping list…</div></div>`;
+      <h3 style="font-size:15px;margin:18px 0 2px">🚩 Flagged for Notice <span style="color:var(--unmap);font-weight:800">(2026 SIR draft)</span></h3>
+      <div class="hint" id="nomapNote" style="font-size:11.5px;color:var(--ink-3);margin-bottom:6px">draft dated ${esc(DATA.meta.noMappingDate||'2026-08-22')} · submitted voters flagged for a notice (booth/mapping issue) · filter or search name / relative / EPIC</div>
+      <div id="nomapHost"><div class="loading">Loading flagged-for-notice list…</div></div>`;
     $('#boothBack').addEventListener('click',()=>history.back());
     updateFoot();
-    hydrateBooth(x);
     hydrateNomap(x);
   }
   async function hydrateBooth(x){
@@ -784,9 +780,9 @@
     if(st.level!=='booth'||st.booth!==x.booth)return;      // navigated away while loading
     const host=$('#nomapHost');if(!host)return;
     if(!data||!data.rows||!data.rows.length){
-      host.innerHTML=`<div class="note">No no-mapping voters recorded for this booth in the 2026 SIR draft.</div>`;return;}
+      host.innerHTML=`<div class="note">No flagged-for-notice voters recorded for this booth in the 2026 SIR draft.</div>`;return;}
     const note=$('#nomapNote');
-    if(note)note.innerHTML=`<b>${fmt(data.total)}</b> no-mapping voters · draft dated <b>${esc(data.asOf||DATA.meta.noMappingDate)}</b> · filter or search name / relative / EPIC`;
+    if(note)note.innerHTML=`<b>${fmt(data.total)}</b> voters flagged for notice · draft dated <b>${esc(data.asOf||DATA.meta.noMappingDate)}</b> · filter or search name / relative / EPIC`;
     renderNomap(host,data.rows);
   }
   // rows are arrays: [serial, epic, name, sex, age, relative, in2025(Y/N), beforeBooth, mob(0/1)]
@@ -794,9 +790,9 @@
     const catOf=r=>r[6]==='Y'?'In 2025 roll':'New (not in 2025)';
     const cats=['All'];const counts={All:rows.length};
     for(const r of rows){const c=catOf(r);if(!(c in counts)){counts[c]=0;cats.push(c);}counts[c]++;}
-    let cur='All',q='';
+    let cur='All',q=pendingRosterQ||'';pendingRosterQ='';
     host.innerHTML=`<div class="chips" id="nmchips">${cats.map(c=>`<button class="chip ${c==='All'?'on':''}" data-c="${esc(c)}">${esc(c)} (${fmt(counts[c])})</button>`).join('')}</div>
-      <input class="search" id="nmq" placeholder="Search name / relative / EPIC…" style="width:100%;margin-bottom:8px" aria-label="Search no-mapping list">
+      <input class="search" id="nmq" placeholder="Search name / relative / EPIC…" style="width:100%;margin-bottom:8px" aria-label="Search flagged-for-notice list">
       <div class="rostwrap"><table><thead><tr><th title="serial in the 2026 draft">Sl. No</th><th>Name</th><th>EPIC</th><th>Relative</th><th class="r">Age</th><th>Sex</th><th title="was this voter in the 2025 roll?">In 2025 Roll</th><th title="booth number in the 2025 roll">2025 Booth</th></tr></thead><tbody id="nmbody"></tbody></table></div>
       <div class="scope-meta" id="nmcount" style="margin-top:8px"></div>`;
     const body=host.querySelector('#nmbody'),ncount=host.querySelector('#nmcount');
@@ -812,7 +808,7 @@
     };
     host.querySelector('#nmchips').addEventListener('click',e=>{const c=e.target.dataset.c;if(!c)return;
       cur=c;[...host.querySelectorAll('#nmchips .chip')].forEach(ch=>ch.classList.toggle('on',ch.dataset.c===c));draw();});
-    const nq=host.querySelector('#nmq');
+    const nq=host.querySelector('#nmq');if(q)nq.value=q;
     let tmr;nq.addEventListener('input',e=>{clearTimeout(tmr);const v=e.target.value;tmr=setTimeout(()=>{q=v;draw();},200);});
     draw();
   }
@@ -848,16 +844,16 @@
   }
   function renderSearchResults(q,r){
     const wh=r.wards.map(w=>`<button class="sr" data-t="ward" data-ward="${esc(w.ward)}" data-mandal="${esc(w.mandal)}"><span><b>${esc(w.ward)}</b> ward</span><span class="dim">${esc(w.mandal)} mandala</span></button>`).join('');
-    const vh=(r.voters||[]).map(v=>`<button class="sr" data-t="voter" data-booth="${v.booth}" data-epic="${esc(v.epic)}"><span><b>${esc(v.name)}</b> <span class="dim">${esc(v.epic)}</span><br><span class="dim">${esc(v.relative)} · ${esc(v.sex||'')} ${esc(v.age||'')} · ${esc(v.reason)}</span></span><span class="dim" style="text-align:right;white-space:nowrap">Booth #${v.booth}<br>Sl.No ${esc(v.serial)}</span></button>`).join('');
+    const vh=(r.voters||[]).map(v=>`<button class="sr" data-t="voter" data-booth="${v.booth}" data-epic="${esc(v.epic)}"><span><b>${esc(v.name)}</b> <span class="dim">${esc(v.epic)}</span><br><span class="dim">${esc(v.relative)} · ${esc(v.sex||'')} ${esc(v.age||'')} · ${esc(v.tag)}</span></span><span class="dim" style="text-align:right;white-space:nowrap">Booth #${v.booth}<br>Sl.No ${esc(v.serial)}</span></button>`).join('');
     const loading=r.loading;
     const none=!loading&&!r.wards.length&&!(r.voters||[]).length;
     const more=r.total>(r.voters||[]).length?` (showing first ${r.voters.length} of ${fmt(r.total)} — refine to narrow)`:'';
     $('#app').innerHTML=`<h2 class="scope">Search: &ldquo;${esc(q)}&rdquo;</h2>
-      <div class="scope-meta">${loading?'searching all deleted voters…':`${r.wards.length} ward(s) · ${fmt(r.total||0)} deleted / to-be-deleted voter(s) matched${more}`}</div>
+      <div class="scope-meta">${loading?'searching flagged-for-notice voters…':`${r.wards.length} ward(s) · ${fmt(r.total||0)} flagged-for-notice voter(s) matched${more}`}</div>
       ${r.wards.length?`<div class="sect"><h3>Wards</h3></div><div class="srlist">${wh}</div>`:''}
-      ${loading?`<div class="loading">Loading the ${fmt(DATA.meta.deletedCount||318662)}-record deletion index (one-time)…</div>`:''}
-      ${(r.voters||[]).length?`<div class="sect"><h3>Deleted / to-be-deleted voters</h3></div><div class="srlist">${vh}</div>`:''}
-      ${none?`<div class="note">No ward or deleted voter matches &ldquo;${esc(q)}&rdquo;. You can search by voter <b>name</b>, <b>relative name</b>, <b>EPIC</b>, ward name, or booth number.</div>`:''}`;
+      ${loading?`<div class="loading">Loading the flagged-for-notice index (one-time)…</div>`:''}
+      ${(r.voters||[]).length?`<div class="sect"><h3>Flagged for Notice</h3></div><div class="srlist">${vh}</div>`:''}
+      ${none?`<div class="note">No ward or flagged-for-notice voter matches &ldquo;${esc(q)}&rdquo;. You can search by voter <b>name</b>, <b>relative name</b>, <b>EPIC</b>, ward name, or booth number.</div>`:''}`;
     document.querySelectorAll('.sr').forEach(b=>b.addEventListener('click',()=>{
       const t=b.dataset.t;
       if(t==='ward')go({level:'ward',mandal:b.dataset.mandal,ward:b.dataset.ward,booth:null});
